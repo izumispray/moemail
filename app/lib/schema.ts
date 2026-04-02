@@ -152,7 +152,23 @@ export const messageShares = sqliteTable('message_share', {
   tokenIdx: index('message_share_token_idx').on(table.token),
 }));
 
-
+export const domains = sqliteTable('domain', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull().unique(),              // e.g. newsletter.example.com
+  subdomain: text('subdomain').notNull(),             // e.g. newsletter
+  rootDomain: text('root_domain').notNull(),          // e.g. example.com
+  zoneId: text('zone_id').notNull(),                  // CF Zone ID
+  mxRecordIds: text('mx_record_ids'),                 // JSON array of CF DNS record IDs
+  txtRecordId: text('txt_record_id'),                 // CF DNS record ID for SPF TXT
+  status: text('status').notNull().default('active'),  // active / pending / error
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  createdBy: text('created_by').references(() => users.id),
+}, (table) => ({
+  statusIdx: index('domain_status_idx').on(table.status),
+  createdByIdx: index('domain_created_by_idx').on(table.createdBy),
+}));
 
 export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
   user: one(users, {
@@ -194,3 +210,10 @@ export const messageSharesRelations = relations(messageShares, ({ one }) => ({
     references: [messages.id],
   }),
 }));
+
+export const domainsRelations = relations(domains, ({ one }) => ({
+  creator: one(users, {
+    fields: [domains.createdBy],
+    references: [users.id],
+  }),
+}));

@@ -5,6 +5,7 @@ declare global {
   interface CloudflareEnv {
     DB: D1Database;
     SITE_CONFIG: KVNamespace;
+    CLOUDFLARE_API_TOKEN: string;
   }
 
   interface Window {

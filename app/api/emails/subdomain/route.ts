@@ -1,0 +1,349 @@
+import { NextResponse } from "next/server"
+import { nanoid } from "nanoid"
+import { createDb } from "@/lib/db"
+import { emails, domains } from "@/lib/schema"
+import { eq, and, sql } from "drizzle-orm"
+import { getRequestContext } from "@cloudflare/next-on-pages"
+import { getUserId } from "@/lib/apiKey"
+import { getUserRole } from "@/lib/auth"
+import { ROLES } from "@/lib/permissions"
+import {
+  provisionSubdomainEmail,
+  deprovisionSubdomainEmail,
+  findZoneId,
+} from "@/lib/cloudflare-dns"
+
+export const runtime = "edge"
+
+/**
+ * POST /api/emails/subdomain
+ *
+ * 一键式子域名邮箱创建 API（自动化专用）
+ *
+ * 流程：
+ * 1. 生成随机子域名前缀（如 "k3x9"）
+ * 2. 调用 Cloudflare DNS API 创建该子域名的 MX + SPF 记录
+ * 3. 将新域名加入 KV 的 EMAIL_DOMAINS
+ * 4. 在 D1 中创建 domain 记录
+ * 5. 在 D1 中创建 email 记录（永久）
+ * 6. 返回完整的邮箱地址
+ *
+ * Request body:
+ * {
+ *   prefix?: string   // 可选，子域名前缀（不传则随机生成）
+ *   name?: string     // 可选，邮箱名（不传则随机生成）
+ *   domain?: string   // 可选，根域名（不传则使用 CLOUDFLARE_ROOT_DOMAIN）
+ * }
+ *
+ * Response:
+ * {
+ *   email: "abc123@k3x9.example.com",
+ *   subdomain: "k3x9.example.com",
+ *   domainId: "uuid",
+ *   emailId: "uuid"
+ * }
+ */
+export async function POST(request: Request) {
+  const userId = await getUserId()
+  if (!userId) {
+    return NextResponse.json({ error: "未登录或 API Key 无效" }, { status: 401 })
+  }
+
+  const userRole = await getUserRole(userId)
+  if (userRole !== ROLES.EMPEROR) {
+    return NextResponse.json({ error: "仅皇帝可使用此 API" }, { status: 403 })
+  }
+
+  const db = createDb()
+  const env = getRequestContext().env
+
+  try {
+    const body = await request.json() as {
+      prefix?: string
+      name?: string
+      domain: string
+    }
+
+    const rootDomain = body.domain
+    if (!rootDomain) {
+      return NextResponse.json(
+        { error: "缺少基础域名参数 domain" },
+        { status: 400 }
+      )
+    }
+
+    // 验证 domain 是否在 EMAIL_DOMAINS 列表中
+    const domainString = await env.SITE_CONFIG.get("EMAIL_DOMAINS")
+    const allowedDomains = domainString ? domainString.split(",") : []
+    if (!allowedDomains.includes(rootDomain)) {
+      return NextResponse.json(
+        { error: `域名 ${rootDomain} 不在允许列表中，请先在前端配置中添加` },
+        { status: 400 }
+      )
+    }
+
+    const apiToken = env.CLOUDFLARE_API_TOKEN
+
+    if (!apiToken) {
+      return NextResponse.json(
+        { error: "Cloudflare 配置不完整，请检查环境变量 CLOUDFLARE_API_TOKEN" },
+        { status: 500 }
+      )
+    }
+
+    // 自动检测域名对应的 Zone ID
+    const zoneId = await findZoneId(rootDomain, apiToken)
+
+    // 生成或使用指定的子域名前缀
+    const subdomainPrefix = (body.prefix || nanoid(6)).toLowerCase()
+
+    // 验证格式
+    const subdomainRegex = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
+    if (!subdomainRegex.test(subdomainPrefix)) {
+      return NextResponse.json(
+        { error: "子域名格式不正确，只允许小写字母、数字和连字符" },
+        { status: 400 }
+      )
+    }
+
+    const fullDomain = `${subdomainPrefix}.${rootDomain}`
+
+    // 检查子域名是否已存在
+    const existingDomain = await db.query.domains.findFirst({
+      where: eq(domains.name, fullDomain),
+    })
+
+    if (existingDomain) {
+      return NextResponse.json(
+        { error: `子域名 ${fullDomain} 已存在` },
+        { status: 409 }
+      )
+    }
+
+    // 1. Cloudflare DNS：创建 MX + SPF 记录
+    const dnsResult = await provisionSubdomainEmail(
+      zoneId,
+      apiToken,
+      subdomainPrefix,
+      rootDomain
+    )
+
+    if (!dnsResult.success) {
+      return NextResponse.json(
+        { error: `DNS 记录创建失败: ${dnsResult.error}` },
+        { status: 502 }
+      )
+    }
+
+    // 2. D1：保存 domain 记录
+    const [newDomain] = await db
+      .insert(domains)
+      .values({
+        name: fullDomain,
+        subdomain: subdomainPrefix,
+        rootDomain,
+        zoneId,
+        mxRecordIds: JSON.stringify(dnsResult.mxRecordIds),
+        txtRecordId: dnsResult.txtRecordId,
+        status: "active",
+        createdBy: userId,
+      })
+      .returning()
+
+    // 3. KV：更新 EMAIL_DOMAINS
+    const currentDomains = await env.SITE_CONFIG.get("EMAIL_DOMAINS")
+    const domainList = currentDomains ? currentDomains.split(",") : []
+    if (!domainList.includes(fullDomain)) {
+      domainList.push(fullDomain)
+      await env.SITE_CONFIG.put("EMAIL_DOMAINS", domainList.join(","))
+    }
+
+    // 4. D1：创建邮箱记录（永久有效）
+    const emailName = body.name || nanoid(8)
+    const address = `${emailName}@${fullDomain}`
+
+    // 确认邮箱地址未被占用
+    const existingEmail = await db.query.emails.findFirst({
+      where: eq(sql`LOWER(${emails.address})`, address.toLowerCase()),
+    })
+
+    if (existingEmail) {
+      return NextResponse.json(
+        { error: `邮箱地址 ${address} 已被使用` },
+        { status: 409 }
+      )
+    }
+
+    const [newEmail] = await db
+      .insert(emails)
+      .values({
+        address,
+        userId,
+        createdAt: new Date(),
+        expiresAt: new Date("9999-01-01T00:00:00.000Z"), // 永久
+      })
+      .returning({ id: emails.id, address: emails.address })
+
+    return NextResponse.json(
+      {
+        email: newEmail.address,
+        emailId: newEmail.id,
+        subdomain: fullDomain,
+        domainId: newDomain.id,
+      },
+      { status: 201 }
+    )
+  } catch (error) {
+    console.error("Failed to create subdomain email:", error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "创建子域名邮箱失败" },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * GET /api/emails/subdomain
+ *
+ * 列出所有子域名邮箱（按子域名分组）
+ */
+export async function GET() {
+  const userId = await getUserId()
+  if (!userId) {
+    return NextResponse.json({ error: "未登录或 API Key 无效" }, { status: 401 })
+  }
+
+  const userRole = await getUserRole(userId)
+  if (userRole !== ROLES.EMPEROR) {
+    return NextResponse.json({ error: "仅皇帝可使用此 API" }, { status: 403 })
+  }
+
+  const db = createDb()
+
+  // 获取所有子域名
+  const allDomains = await db.query.domains.findMany({
+    where: eq(domains.status, "active"),
+    orderBy: (domains, { desc }) => [desc(domains.createdAt)],
+  })
+
+  // 获取所有子域名邮箱
+  const subdomainEmails = []
+  for (const domain of allDomains) {
+    const domainEmails = await db.query.emails.findMany({
+      where: and(
+        sql`${emails.address} LIKE ${'%@' + domain.name}`,
+        eq(emails.userId, userId)
+      ),
+    })
+
+    subdomainEmails.push({
+      domain: domain.name,
+      domainId: domain.id,
+      subdomain: domain.subdomain,
+      rootDomain: domain.rootDomain,
+      createdAt: domain.createdAt,
+      emails: domainEmails.map((e) => ({
+        id: e.id,
+        address: e.address,
+        createdAt: e.createdAt,
+        expiresAt: e.expiresAt,
+      })),
+    })
+  }
+
+  return NextResponse.json({ subdomainEmails })
+}
+
+/**
+ * DELETE /api/emails/subdomain
+ *
+ * 删除整个子域名及其所有邮箱
+ *
+ * Request body:
+ * {
+ *   domainId: string  // 要删除的子域名 ID
+ * }
+ */
+export async function DELETE(request: Request) {
+  const userId = await getUserId()
+  if (!userId) {
+    return NextResponse.json({ error: "未登录或 API Key 无效" }, { status: 401 })
+  }
+
+  const userRole = await getUserRole(userId)
+  if (userRole !== ROLES.EMPEROR) {
+    return NextResponse.json({ error: "仅皇帝可使用此 API" }, { status: 403 })
+  }
+
+  const db = createDb()
+  const env = getRequestContext().env
+
+  try {
+    const { domainId } = await request.json() as { domainId: string }
+
+    if (!domainId) {
+      return NextResponse.json({ error: "缺少 domainId 参数" }, { status: 400 })
+    }
+
+    // 查找域名
+    const domain = await db.query.domains.findFirst({
+      where: eq(domains.id, domainId),
+    })
+
+    if (!domain) {
+      return NextResponse.json({ error: "子域名不存在" }, { status: 404 })
+    }
+
+    // 1. 删除该域名下的所有邮箱
+    const domainEmails = await db.query.emails.findMany({
+      where: sql`${emails.address} LIKE ${'%@' + domain.name}`,
+    })
+
+    for (const email of domainEmails) {
+      await db.delete(emails).where(eq(emails.id, email.id))
+    }
+
+    // 2. 清理 DNS 记录
+    const recordIds: string[] = []
+    if (domain.mxRecordIds) {
+      try {
+        recordIds.push(...(JSON.parse(domain.mxRecordIds) as string[]))
+      } catch { /* ignore */ }
+    }
+    if (domain.txtRecordId) {
+      recordIds.push(domain.txtRecordId)
+    }
+
+    if (recordIds.length > 0) {
+      await deprovisionSubdomainEmail(
+        domain.zoneId,
+        env.CLOUDFLARE_API_TOKEN,
+        recordIds
+      )
+    }
+
+    // 3. 从 KV 移除域名
+    const currentDomains = await env.SITE_CONFIG.get("EMAIL_DOMAINS")
+    if (currentDomains) {
+      const domainList = currentDomains
+        .split(",")
+        .filter((d) => d !== domain.name)
+      await env.SITE_CONFIG.put("EMAIL_DOMAINS", domainList.join(","))
+    }
+
+    // 4. 删除域名记录
+    await db.delete(domains).where(eq(domains.id, domainId))
+
+    return NextResponse.json({
+      success: true,
+      message: `子域名 ${domain.name} 及其 ${domainEmails.length} 个邮箱已删除`,
+      deletedEmails: domainEmails.length,
+    })
+  } catch (error) {
+    console.error("Failed to delete subdomain:", error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "删除子域名邮箱失败" },
+      { status: 500 }
+    )
+  }
+}
