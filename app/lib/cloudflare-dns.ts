@@ -58,16 +58,40 @@ async function cfFetch<T>(
   options: RequestInit = {}
 ): Promise<CloudflareApiResponse<T>> {
   const url = `${CF_API_BASE}${path}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${apiToken}`,
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
 
-  const data = (await response.json()) as CloudflareApiResponse<T>;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
+  } catch (fetchError) {
+    throw new Error(
+      `Cloudflare API network error for ${path}: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`
+    );
+  }
+
+  // 确认响应是 JSON 格式
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    const text = await response.text().catch(() => "(unreadable)");
+    throw new Error(
+      `Cloudflare API returned non-JSON (status ${response.status}) for ${path}: ${text.substring(0, 200)}`
+    );
+  }
+
+  let data: CloudflareApiResponse<T>;
+  try {
+    data = (await response.json()) as CloudflareApiResponse<T>;
+  } catch {
+    throw new Error(
+      `Cloudflare API returned invalid JSON (status ${response.status}) for ${path}`
+    );
+  }
 
   if (!data.success) {
     const errorMsg = data.errors?.map((e) => e.message).join(", ") || "Unknown CF API error";
