@@ -439,6 +439,10 @@ const deployDnsWorker = () => {
     if (process.env.DNS_WORKER_SECRET) {
       secrets.DNS_WORKER_SECRET = process.env.DNS_WORKER_SECRET;
     }
+    // Email Worker name for catch-all rule routing
+    const emailWorkerName = `${PROJECT_NAME}-email-receiver-worker`;
+    secrets.EMAIL_WORKER_NAME = emailWorkerName;
+    console.log(`📧 Email Worker name for routing: ${emailWorkerName}`);
 
     if (Object.keys(secrets).length > 0) {
       const tmpFile = resolve(".dns-worker-secrets.json");

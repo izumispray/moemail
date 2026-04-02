@@ -10,6 +10,7 @@
 interface Env {
   CLOUDFLARE_API_TOKEN: string
   DNS_WORKER_SECRET: string
+  EMAIL_WORKER_NAME: string
 }
 
 const CF_API_BASE = "https://api.cloudflare.com/client/v4"
@@ -57,9 +58,73 @@ async function cfFetch<T>(
   return data
 }
 
+// ---- Email Routing Helpers ----
+
+/**
+ * 启用 Zone 的 Email Routing（幂等操作）
+ * POST /zones/{zone_id}/email/routing/enable
+ */
+async function enableEmailRouting(
+  zoneId: string,
+  apiToken: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await cfFetch(
+      `/zones/${zoneId}/email/routing/enable`,
+      apiToken,
+      { method: "POST", body: JSON.stringify({}) }
+    )
+    return { success: true }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    // "already enabled" is not a real error
+    if (msg.includes("already enabled") || msg.includes("Email Routing is already configured")) {
+      return { success: true }
+    }
+    return { success: false, error: msg }
+  }
+}
+
+/**
+ * 设置 Catch-all 规则将所有邮件路由到 Email Worker
+ * PUT /zones/{zone_id}/email/routing/rules/catch_all
+ */
+async function setCatchAllToWorker(
+  zoneId: string,
+  apiToken: string,
+  workerName: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await cfFetch(
+      `/zones/${zoneId}/email/routing/rules/catch_all`,
+      apiToken,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          enabled: true,
+          actions: [
+            {
+              type: "worker",
+              value: [workerName],
+            },
+          ],
+          matchers: [
+            {
+              type: "all",
+            },
+          ],
+        }),
+      }
+    )
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 // ---- Handlers ----
 
-async function handleProvision(body: any, apiToken: string): Promise<Response> {
+async function handleProvision(body: any, apiToken: string, emailWorkerName?: string): Promise<Response> {
   const { zoneId, subdomain, rootDomain } = body
   if (!zoneId || !subdomain || !rootDomain) {
     return Response.json({ error: "Missing zoneId, subdomain, or rootDomain" }, { status: 400 })
@@ -68,9 +133,11 @@ async function handleProvision(body: any, apiToken: string): Promise<Response> {
   const fullDomain = `${subdomain}.${rootDomain}`
   const mxRecordIds: string[] = []
   let txtRecordId: string | null = null
+  let emailRoutingEnabled = false
+  let catchAllSet = false
 
   try {
-    // Create MX records
+    // 1. Create MX records
     for (const mx of CF_EMAIL_MX_SERVERS) {
       const data = await cfFetch<{ id: string }>(
         `/zones/${zoneId}/dns_records`,
@@ -89,7 +156,7 @@ async function handleProvision(body: any, apiToken: string): Promise<Response> {
       mxRecordIds.push(data.result.id)
     }
 
-    // Create SPF TXT record
+    // 2. Create SPF TXT record
     const spfData = await cfFetch<{ id: string }>(
       `/zones/${zoneId}/dns_records`,
       apiToken,
@@ -105,11 +172,31 @@ async function handleProvision(body: any, apiToken: string): Promise<Response> {
     )
     txtRecordId = spfData.result.id
 
+    // 3. Enable Email Routing on the zone (idempotent)
+    const enableResult = await enableEmailRouting(zoneId, apiToken)
+    emailRoutingEnabled = enableResult.success
+    if (!enableResult.success) {
+      console.warn(`Email Routing enable warning: ${enableResult.error}`)
+    }
+
+    // 4. Set catch-all rule to route emails to Email Worker
+    if (emailWorkerName) {
+      const catchAllResult = await setCatchAllToWorker(zoneId, apiToken, emailWorkerName)
+      catchAllSet = catchAllResult.success
+      if (!catchAllResult.success) {
+        console.warn(`Catch-all rule warning: ${catchAllResult.error}`)
+      }
+    } else {
+      console.warn("EMAIL_WORKER_NAME not configured, skipping catch-all rule")
+    }
+
     return Response.json({
       success: true,
       domain: fullDomain,
       mxRecordIds,
       txtRecordId,
+      emailRoutingEnabled,
+      catchAllSet,
     })
   } catch (error) {
     return Response.json({
@@ -117,6 +204,8 @@ async function handleProvision(body: any, apiToken: string): Promise<Response> {
       domain: fullDomain,
       mxRecordIds,
       txtRecordId,
+      emailRoutingEnabled,
+      catchAllSet,
       error: error instanceof Error ? error.message : String(error),
     }, { status: 502 })
   }
@@ -215,7 +304,7 @@ export default {
 
       switch (path) {
         case "/provision":
-          return handleProvision(body, apiToken)
+          return handleProvision(body, apiToken, env.EMAIL_WORKER_NAME)
         case "/deprovision":
           return handleDeprovision(body, apiToken)
         case "/find-zone":
