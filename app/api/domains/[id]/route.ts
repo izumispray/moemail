@@ -5,7 +5,6 @@ import { eq } from "drizzle-orm"
 import { getRequestContext } from "@cloudflare/next-on-pages"
 import { checkPermission } from "@/lib/auth"
 import { PERMISSIONS } from "@/lib/permissions"
-import { deprovisionSubdomainEmail } from "@/lib/cloudflare-dns"
 
 export const runtime = "edge"
 
@@ -54,17 +53,25 @@ export async function DELETE(
     }
 
     if (recordIds.length > 0) {
-      const result = await deprovisionSubdomainEmail(
-        domain.zoneId,
-        env.CLOUDFLARE_API_TOKEN,
-        recordIds
-      )
-
-      if (!result.success) {
-        // DNS 清理失败，但仍然继续删除数据库记录
-        console.warn(
-          `DNS cleanup partially failed for ${domain.name}: ${result.error}`
-        )
+      const dnsWorkerUrl = env.DNS_WORKER_URL
+      const dnsWorkerSecret = env.DNS_WORKER_SECRET
+      if (dnsWorkerUrl && dnsWorkerSecret) {
+        try {
+          const dnsRes = await fetch(`${dnsWorkerUrl}/deprovision`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${dnsWorkerSecret}`,
+            },
+            body: JSON.stringify({ zoneId: domain.zoneId, recordIds }),
+          })
+          const dnsResult = await dnsRes.json() as { success: boolean }
+          if (!dnsResult.success) {
+            console.warn(`DNS cleanup partially failed for ${domain.name}`)
+          }
+        } catch {
+          console.warn(`DNS cleanup via worker failed for ${domain.name}`)
+        }
       }
     }
 

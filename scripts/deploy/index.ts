@@ -65,6 +65,9 @@ const setupConfigFile = (examplePath: string, targetPath: string) => {
         case "wrangler.cleanup.json":
           json.name = `${PROJECT_NAME}-cleanup-worker`;
           break;
+        case "wrangler.dns.json":
+          json.name = `${PROJECT_NAME}-dns-worker`;
+          break;
         default:
           break;
       }
@@ -94,6 +97,7 @@ const setupWranglerConfigs = () => {
     { example: "wrangler.example.json", target: "wrangler.json" },
     { example: "wrangler.email.example.json", target: "wrangler.email.json" },
     { example: "wrangler.cleanup.example.json", target: "wrangler.cleanup.json" },
+    { example: "wrangler.dns.example.json", target: "wrangler.dns.json" },
   ];
 
   // 处理每个配置文件
@@ -285,6 +289,8 @@ const pushPagesSecret = () => {
     'AUTH_GOOGLE_SECRET', 
     'AUTH_SECRET',
     'CLOUDFLARE_API_TOKEN',
+    'DNS_WORKER_URL',
+    'DNS_WORKER_SECRET',
   ];
 
   try {
@@ -408,6 +414,34 @@ const deployCleanupWorker = () => {
 };
 
 /**
+ * 部署DNS Worker
+ */
+const deployDnsWorker = () => {
+  console.log("🚧 Deploying DNS Worker...");
+  try {
+    // Set secrets for DNS worker
+    const secrets: Record<string, string> = {};
+    if (process.env.CLOUDFLARE_API_TOKEN) {
+      secrets.CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
+    }
+    if (process.env.DNS_WORKER_SECRET) {
+      secrets.DNS_WORKER_SECRET = process.env.DNS_WORKER_SECRET;
+    }
+
+    if (Object.keys(secrets).length > 0) {
+      const secretsJson = JSON.stringify(secrets);
+      execSync(`echo '${secretsJson}' | pnpm dlx wrangler secret bulk --config wrangler.dns.json`, { stdio: "inherit" });
+    }
+
+    execSync("pnpm dlx wrangler deploy --config wrangler.dns.json", { stdio: "inherit" });
+    console.log("✅ DNS Worker deployed successfully");
+  } catch (error) {
+    console.error("❌ DNS Worker deployment failed:", error);
+    // 继续执行而不中断
+  }
+};
+
+/**
  * 创建或更新环境变量文件
  */
 const setupEnvFile = () => {
@@ -488,6 +522,7 @@ const main = async () => {
     deployPages();
     deployEmailWorker();
     deployCleanupWorker();
+    deployDnsWorker();
 
     console.log("🎉 Deployment completed successfully");
   } catch (error) {

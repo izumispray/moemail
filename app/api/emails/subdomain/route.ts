@@ -7,10 +7,6 @@ import { getRequestContext } from "@cloudflare/next-on-pages"
 import { getUserId } from "@/lib/apiKey"
 import { getUserRole } from "@/lib/auth"
 import { ROLES } from "@/lib/permissions"
-import {
-  provisionSubdomainEmail,
-  deprovisionSubdomainEmail,
-} from "@/lib/cloudflare-dns"
 
 export const runtime = "edge"
 
@@ -93,13 +89,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const apiToken = env.CLOUDFLARE_API_TOKEN
-    if (!apiToken) {
-      return NextResponse.json(
-        { error: "Cloudflare 配置不完整，请检查环境变量 CLOUDFLARE_API_TOKEN" },
-        { status: 500 }
-      )
-    }
+
     // 生成或使用指定的子域名前缀
     const subdomainPrefix = (body.prefix || nanoid(6)).toLowerCase()
 
@@ -126,13 +116,35 @@ export async function POST(request: Request) {
       )
     }
 
-    // 1. Cloudflare DNS：创建 MX + SPF 记录
-    const dnsResult = await provisionSubdomainEmail(
-      zoneId,
-      apiToken,
-      subdomainPrefix,
-      rootDomain
-    )
+    // 1. 通过 DNS Worker 创建 MX + SPF 记录
+    const dnsWorkerUrl = env.DNS_WORKER_URL
+    const dnsWorkerSecret = env.DNS_WORKER_SECRET
+    if (!dnsWorkerUrl || !dnsWorkerSecret) {
+      return NextResponse.json(
+        { error: "DNS Worker 未配置，请设置 DNS_WORKER_URL 和 DNS_WORKER_SECRET" },
+        { status: 500 }
+      )
+    }
+
+    const dnsRes = await fetch(`${dnsWorkerUrl}/provision`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${dnsWorkerSecret}`,
+      },
+      body: JSON.stringify({
+        zoneId,
+        subdomain: subdomainPrefix,
+        rootDomain,
+      }),
+    })
+    const dnsResult = await dnsRes.json() as {
+      success: boolean
+      domain: string
+      mxRecordIds: string[]
+      txtRecordId: string | null
+      error?: string
+    }
 
     if (!dnsResult.success) {
       return NextResponse.json(
@@ -328,11 +340,23 @@ export async function DELETE(request: Request) {
     }
 
     if (recordIds.length > 0) {
-      await deprovisionSubdomainEmail(
-        domain.zoneId,
-        env.CLOUDFLARE_API_TOKEN,
-        recordIds
-      )
+      const dnsWorkerUrl = env.DNS_WORKER_URL
+      const dnsWorkerSecret = env.DNS_WORKER_SECRET
+      if (dnsWorkerUrl && dnsWorkerSecret) {
+        try {
+          await fetch(`${dnsWorkerUrl}/deprovision`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${dnsWorkerSecret}`,
+            },
+            body: JSON.stringify({ zoneId: domain.zoneId, recordIds }),
+          })
+        } catch {
+          // DNS cleanup failure is non-fatal
+          console.warn("DNS cleanup via worker failed")
+        }
+      }
     }
 
     // 3. 从 KV 移除域名

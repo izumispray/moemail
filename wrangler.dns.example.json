@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dns-worker",
+  "main": "workers/dns-worker.ts",
+  "compatibility_date": "2024-03-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "CLOUDFLARE_API_TOKEN": "${CLOUDFLARE_API_TOKEN}",
+    "DNS_WORKER_SECRET": "${DNS_WORKER_SECRET}"
+  }
+}

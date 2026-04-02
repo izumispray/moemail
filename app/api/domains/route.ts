@@ -6,10 +6,6 @@ import { getRequestContext } from "@cloudflare/next-on-pages"
 import { checkPermission } from "@/lib/auth"
 import { PERMISSIONS } from "@/lib/permissions"
 import { getUserId } from "@/lib/apiKey"
-import {
-  provisionSubdomainEmail,
-  verifySubdomainReady,
-} from "@/lib/cloudflare-dns"
 
 export const runtime = "edge"
 
@@ -30,34 +26,7 @@ export async function GET() {
     orderBy: (domains, { desc }) => [desc(domains.createdAt)],
   })
 
-  // 可选：为每个域名检查 DNS 就绪状态
-  const domainsWithStatus = await Promise.all(
-    allDomains.map(async (domain) => {
-      try {
-        const status = await verifySubdomainReady(
-          domain.zoneId,
-          env.CLOUDFLARE_API_TOKEN,
-          domain.subdomain,
-          domain.rootDomain
-        )
-        return {
-          ...domain,
-          dnsReady: status.ready,
-          mxCount: status.mxCount,
-          hasSpf: status.hasSpf,
-        }
-      } catch {
-        return {
-          ...domain,
-          dnsReady: false,
-          mxCount: 0,
-          hasSpf: false,
-        }
-      }
-    })
-  )
-
-  return NextResponse.json({ domains: domainsWithStatus })
+  return NextResponse.json({ domains: allDomains })
 }
 
 /**
@@ -145,13 +114,35 @@ export async function POST(request: Request) {
       )
     }
 
-    // 1. 调用 Cloudflare DNS API 创建 MX + SPF 记录
-    const result = await provisionSubdomainEmail(
-      zoneId,
-      apiToken,
-      subdomain.toLowerCase(),
-      rootDomain
-    )
+    // 1. 通过 DNS Worker 创建 MX + SPF 记录
+    const dnsWorkerUrl = env.DNS_WORKER_URL
+    const dnsWorkerSecret = env.DNS_WORKER_SECRET
+    if (!dnsWorkerUrl || !dnsWorkerSecret) {
+      return NextResponse.json(
+        { error: "DNS Worker 未配置" },
+        { status: 500 }
+      )
+    }
+
+    const dnsRes = await fetch(`${dnsWorkerUrl}/provision`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${dnsWorkerSecret}`,
+      },
+      body: JSON.stringify({
+        zoneId,
+        subdomain: subdomain.toLowerCase(),
+        rootDomain,
+      }),
+    })
+    const result = await dnsRes.json() as {
+      success: boolean
+      domain: string
+      mxRecordIds: string[]
+      txtRecordId: string | null
+      error?: string
+    }
 
     if (!result.success) {
       return NextResponse.json(
