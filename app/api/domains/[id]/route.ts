@@ -15,7 +15,7 @@ export const runtime = "edge"
  */
 export async function DELETE(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const canAccess = await checkPermission(PERMISSIONS.MANAGE_CONFIG)
   if (!canAccess) {
@@ -26,7 +26,7 @@ export async function DELETE(
   const env = getRequestContext().env
 
   try {
-    const { id } = params
+    const { id } = await params
 
     // 查找域名记录
     const domain = await db.query.domains.findFirst({
@@ -99,7 +99,7 @@ export async function DELETE(
  */
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const canAccess = await checkPermission(PERMISSIONS.MANAGE_CONFIG)
   if (!canAccess) {
@@ -107,7 +107,7 @@ export async function GET(
   }
 
   const db = createDb()
-  const { id } = params
+  const { id } = await params
 
   const domain = await db.query.domains.findFirst({
     where: eq(domains.id, id),
