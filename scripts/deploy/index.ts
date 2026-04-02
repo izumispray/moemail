@@ -419,6 +419,18 @@ const deployCleanupWorker = () => {
 const deployDnsWorker = () => {
   console.log("🚧 Deploying DNS Worker...");
   try {
+    // Auto-generate DNS_WORKER_SECRET if not set
+    if (!process.env.DNS_WORKER_SECRET) {
+      const crypto = require("crypto");
+      const secret = crypto.randomBytes(32).toString("hex");
+      process.env.DNS_WORKER_SECRET = secret;
+      console.log("🔑 Generated DNS_WORKER_SECRET");
+    }
+
+    // Deploy first to create the worker
+    const output = execSync("pnpm dlx wrangler deploy --config wrangler.dns.json", { encoding: "utf-8" });
+    console.log(output);
+
     // Set secrets for DNS worker
     const secrets: Record<string, string> = {};
     if (process.env.CLOUDFLARE_API_TOKEN) {
@@ -433,7 +445,20 @@ const deployDnsWorker = () => {
       execSync(`echo '${secretsJson}' | pnpm dlx wrangler secret bulk --config wrangler.dns.json`, { stdio: "inherit" });
     }
 
-    execSync("pnpm dlx wrangler deploy --config wrangler.dns.json", { stdio: "inherit" });
+    // Extract worker URL from deploy output
+    const urlMatch = output.match(/https:\/\/[\w-]+\.[\w-]+\.workers\.dev/);
+    if (urlMatch) {
+      const workerUrl = urlMatch[0];
+      process.env.DNS_WORKER_URL = workerUrl;
+      console.log(`📌 DNS Worker URL: ${workerUrl}`);
+    } else if (!process.env.DNS_WORKER_URL) {
+      // Construct URL from project name
+      const projectName = process.env.PROJECT_NAME || "moemail";
+      const workerUrl = `https://${projectName}-dns-worker.${process.env.CLOUDFLARE_ACCOUNT_ID?.substring(0,8) || "unknown"}.workers.dev`;
+      process.env.DNS_WORKER_URL = workerUrl;
+      console.log(`⚠️ Could not extract URL from output, using: ${workerUrl}`);
+    }
+
     console.log("✅ DNS Worker deployed successfully");
   } catch (error) {
     console.error("❌ DNS Worker deployment failed:", error);
@@ -518,11 +543,11 @@ const main = async () => {
     migrateDatabase();
     await checkAndCreateKVNamespace();
     await checkAndCreatePages();
+    deployDnsWorker();
     pushPagesSecret();
     deployPages();
     deployEmailWorker();
     deployCleanupWorker();
-    deployDnsWorker();
 
     console.log("🎉 Deployment completed successfully");
   } catch (error) {
