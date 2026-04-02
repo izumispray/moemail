@@ -239,7 +239,7 @@ export async function POST(request: Request) {
  *
  * 列出所有子域名邮箱（按子域名分组）
  */
-export async function GET() {
+export async function GET(request: Request) {
   const userId = await getUserId()
   if (!userId) {
     return NextResponse.json({ error: "未登录或 API Key 无效" }, { status: 401 })
@@ -252,9 +252,17 @@ export async function GET() {
 
   const db = createDb()
 
-  // 获取所有子域名
+  const { searchParams } = new URL(request.url)
+  const rootDomainFilter = searchParams.get("rootDomain")
+
+  // 获取子域名（支持按根域名筛选）
+  const domainConditions = [eq(domains.status, "active")]
+  if (rootDomainFilter) {
+    domainConditions.push(eq(domains.rootDomain, rootDomainFilter))
+  }
+
   const allDomains = await db.query.domains.findMany({
-    where: eq(domains.status, "active"),
+    where: and(...domainConditions),
     orderBy: (domains, { desc }) => [desc(domains.createdAt)],
   })
 

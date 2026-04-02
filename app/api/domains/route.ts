@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createDb } from "@/lib/db"
 import { domains } from "@/lib/schema"
-import { eq } from "drizzle-orm"
+import { eq, and } from "drizzle-orm"
 import { getRequestContext } from "@cloudflare/next-on-pages"
 import { checkPermission } from "@/lib/auth"
 import { PERMISSIONS } from "@/lib/permissions"
@@ -13,7 +13,7 @@ export const runtime = "edge"
  * GET /api/domains
  * 获取所有已配置的子域名列表（仅皇帝可访问）
  */
-export async function GET() {
+export async function GET(request: Request) {
   const canAccess = await checkPermission(PERMISSIONS.MANAGE_CONFIG)
   if (!canAccess) {
     return NextResponse.json({ error: "权限不足" }, { status: 403 })
@@ -21,7 +21,16 @@ export async function GET() {
 
   const db = createDb()
 
+  const { searchParams } = new URL(request.url)
+  const rootDomain = searchParams.get("rootDomain")
+
+  const conditions = []
+  if (rootDomain) {
+    conditions.push(eq(domains.rootDomain, rootDomain))
+  }
+
   const allDomains = await db.query.domains.findMany({
+    where: conditions.length > 0 ? and(...conditions) : undefined,
     orderBy: (domains, { desc }) => [desc(domains.createdAt)],
   })
 
