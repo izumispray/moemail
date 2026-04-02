@@ -9,7 +9,6 @@ import { getUserId } from "@/lib/apiKey"
 import {
   provisionSubdomainEmail,
   verifySubdomainReady,
-  findZoneId,
 } from "@/lib/cloudflare-dns"
 
 export const runtime = "edge"
@@ -113,17 +112,24 @@ export async function POST(request: Request) {
       )
     }
 
-    const apiToken = env.CLOUDFLARE_API_TOKEN
+    // 从 KV 读取预存的 Zone ID
+    const zonesJson = await env.SITE_CONFIG.get("EMAIL_DOMAIN_ZONES")
+    const zones: Record<string, string> = zonesJson ? JSON.parse(zonesJson) : {}
+    const zoneId = zones[rootDomain]
+    if (!zoneId) {
+      return NextResponse.json(
+        { error: `域名 ${rootDomain} 未配置 Zone ID，请在前端配置中填写` },
+        { status: 400 }
+      )
+    }
 
+    const apiToken = env.CLOUDFLARE_API_TOKEN
     if (!apiToken) {
       return NextResponse.json(
         { error: "Cloudflare 配置不完整，请检查环境变量 CLOUDFLARE_API_TOKEN" },
         { status: 500 }
       )
     }
-
-    // 自动检测域名对应的 Zone ID
-    const zoneId = await findZoneId(rootDomain, apiToken)
 
     const fullDomain = `${subdomain.toLowerCase()}.${rootDomain}`
 

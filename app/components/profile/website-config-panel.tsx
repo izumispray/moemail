@@ -42,6 +42,8 @@ export function WebsiteConfigPanel() {
   const [loading, setLoading] = useState(false)
   const [subdomains, setSubdomains] = useState<SubdomainInfo[]>([])
   const [newDomainInput, setNewDomainInput] = useState("")
+  const [newZoneIdInput, setNewZoneIdInput] = useState("")
+  const [domainZones, setDomainZones] = useState<Record<string, string>>({})
   const { toast } = useToast()
 
   const fetchConfig = useCallback(async () => {
@@ -62,6 +64,7 @@ export function WebsiteConfigPanel() {
       setEmailDomains(data.emailDomains)
       setAdminContact(data.adminContact)
       setMaxEmails(data.maxEmails || EMAIL_CONFIG.MAX_ACTIVE_EMAILS.toString())
+      setDomainZones((data as any).domainZones || {})
       setTurnstileEnabled(Boolean(data.turnstile?.enabled))
       setTurnstileSiteKey(data.turnstile?.siteKey ?? "")
       setTurnstileSecretKey(data.turnstile?.secretKey ?? "")
@@ -96,6 +99,7 @@ export function WebsiteConfigPanel() {
           emailDomains,
           adminContact,
           maxEmails: maxEmails || EMAIL_CONFIG.MAX_ACTIVE_EMAILS.toString(),
+          domainZones,
           turnstile: {
             enabled: turnstileEnabled,
             siteKey: turnstileSiteKey,
@@ -123,7 +127,12 @@ export function WebsiteConfigPanel() {
 
   const addDomain = () => {
     const val = newDomainInput.trim().toLowerCase()
+    const zoneId = newZoneIdInput.trim()
     if (!val) return
+    if (!zoneId) {
+      toast({ title: "请填写 Zone ID", description: "可在 Cloudflare Dashboard 的域名概览页找到", variant: "destructive" })
+      return
+    }
     const list = emailDomains ? emailDomains.split(",").filter(Boolean) : []
     if (list.includes(val)) {
       toast({ title: "域名已存在", variant: "destructive" })
@@ -131,12 +140,19 @@ export function WebsiteConfigPanel() {
     }
     list.push(val)
     setEmailDomains(list.join(","))
+    setDomainZones(prev => ({ ...prev, [val]: zoneId }))
     setNewDomainInput("")
+    setNewZoneIdInput("")
   }
 
   const removeDomain = (domain: string) => {
     const list = emailDomains.split(",").filter(Boolean).filter(d => d.trim() !== domain)
     setEmailDomains(list.join(","))
+    setDomainZones(prev => {
+      const next = { ...prev }
+      delete next[domain]
+      return next
+    })
   }
 
   const deleteSubdomain = async (id: string) => {
@@ -200,7 +216,13 @@ export function WebsiteConfigPanel() {
                   {/* 基础域名行 */}
                   <div className="flex items-center gap-2 px-3 py-2 bg-muted/30">
                     <Globe className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span className="text-sm font-medium flex-1">{domain}</span>
+                    <span className="text-sm font-medium">{domain}</span>
+                    {domainZones[domain] && (
+                      <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                        Zone: {domainZones[domain].substring(0, 8)}...
+                      </span>
+                    )}
+                    <span className="flex-1" />
                     <button
                       type="button"
                       className="text-muted-foreground hover:text-destructive transition-colors p-0.5"
@@ -255,28 +277,37 @@ export function WebsiteConfigPanel() {
           </div>
 
           {/* 添加新域名 */}
-          <div className="flex gap-2">
-            <Input
-              value={newDomainInput}
-              onChange={(e) => setNewDomainInput(e.target.value)}
-              placeholder={t("emailDomainsPlaceholder") || "输入域名，如 example.com 或 sub.example.com"}
-              className="text-sm"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  addDomain()
-                }
-              }}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={addDomain}
-              className="shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-            </Button>
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <Input
+                value={newDomainInput}
+                onChange={(e) => setNewDomainInput(e.target.value)}
+                placeholder={"输入域名，如 example.com"}
+                className="text-sm"
+              />
+              <Input
+                value={newZoneIdInput}
+                onChange={(e) => setNewZoneIdInput(e.target.value)}
+                placeholder={"Cloudflare Zone ID"}
+                className="text-sm font-mono"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    addDomain()
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={addDomain}
+                className="shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Zone ID 可在 Cloudflare Dashboard → 域名概览页右侧找到</p>
           </div>
         </div>
 
