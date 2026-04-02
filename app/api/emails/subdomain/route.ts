@@ -58,6 +58,7 @@ export async function POST(request: Request) {
       prefix?: string
       name?: string
       domain: string
+      expiryTime?: number  // 过期时间（毫秒），0 或不传 = 永不过期
     }
 
     const rootDomain = body.domain
@@ -193,13 +194,18 @@ export async function POST(request: Request) {
       )
     }
 
+    const now = new Date()
+    const expiresAt = body.expiryTime && body.expiryTime > 0
+      ? new Date(now.getTime() + body.expiryTime)
+      : new Date("9999-01-01T00:00:00.000Z")
+
     const [newEmail] = await db
       .insert(emails)
       .values({
         address,
         userId,
-        createdAt: new Date(),
-        expiresAt: new Date("9999-01-01T00:00:00.000Z"), // 永久
+        createdAt: now,
+        expiresAt,
       })
       .returning({ id: emails.id, address: emails.address })
 

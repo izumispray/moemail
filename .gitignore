@@ -51,3 +51,9 @@ public/sw.js
 wrangler.json
 wrangler.cleanup.json
 wrangler.email.json
+wrangler.dns.json
+
+# test scripts (may contain secrets)
+test_*.mjs
+test_*.js
+test_output.txt
