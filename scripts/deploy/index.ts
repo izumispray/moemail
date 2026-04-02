@@ -441,8 +441,15 @@ const deployDnsWorker = () => {
     }
 
     if (Object.keys(secrets).length > 0) {
-      const secretsJson = JSON.stringify(secrets);
-      execSync(`echo '${secretsJson}' | pnpm dlx wrangler secret bulk --config wrangler.dns.json`, { stdio: "inherit" });
+      const tmpFile = resolve(".dns-worker-secrets.json");
+      writeFileSync(tmpFile, JSON.stringify(secrets));
+      try {
+        execSync(`pnpm dlx wrangler secret bulk ${tmpFile} --config wrangler.dns.json`, { stdio: "inherit" });
+      } finally {
+        if (existsSync(tmpFile)) {
+          execSync(`rm ${tmpFile}`, { stdio: "inherit" });
+        }
+      }
     }
 
     // Extract worker URL from deploy output
