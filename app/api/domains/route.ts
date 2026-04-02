@@ -20,7 +20,6 @@ export async function GET() {
   }
 
   const db = createDb()
-  const env = getRequestContext().env
 
   const allDomains = await db.query.domains.findMany({
     orderBy: (domains, { desc }) => [desc(domains.createdAt)],

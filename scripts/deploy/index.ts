@@ -3,6 +3,7 @@ import "dotenv/config";
 import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import {
   createDatabase,
   createKVNamespace,
@@ -421,8 +422,7 @@ const deployDnsWorker = () => {
   try {
     // Auto-generate DNS_WORKER_SECRET if not set
     if (!process.env.DNS_WORKER_SECRET) {
-      const crypto = require("crypto");
-      const secret = crypto.randomBytes(32).toString("hex");
+      const secret = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "");
       process.env.DNS_WORKER_SECRET = secret;
       console.log("🔑 Generated DNS_WORKER_SECRET");
     }
