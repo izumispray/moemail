@@ -168,15 +168,8 @@ export async function POST(request: Request) {
       })
       .returning()
 
-    // 3. KV：更新 EMAIL_DOMAINS
-    const currentDomains = await env.SITE_CONFIG.get("EMAIL_DOMAINS")
-    const domainList = currentDomains ? currentDomains.split(",") : []
-    if (!domainList.includes(fullDomain)) {
-      domainList.push(fullDomain)
-      await env.SITE_CONFIG.put("EMAIL_DOMAINS", domainList.join(","))
-    }
 
-    // 4. D1：创建邮箱记录（永久有效）
+    // 3. D1：创建邮箱记录（永久有效）
     const emailName = body.name || nanoid(8)
     const address = `${emailName}@${fullDomain}`
 
