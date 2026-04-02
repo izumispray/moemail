@@ -466,6 +466,14 @@ const deployDnsWorker = () => {
       console.log(`⚠️ Could not extract URL from output, using: ${workerUrl}`);
     }
 
+    // Write to .env so pushPagesSecret can read them
+    if (process.env.DNS_WORKER_URL) {
+      updateEnvVar("DNS_WORKER_URL", process.env.DNS_WORKER_URL);
+    }
+    if (process.env.DNS_WORKER_SECRET) {
+      updateEnvVar("DNS_WORKER_SECRET", process.env.DNS_WORKER_SECRET);
+    }
+
     console.log("✅ DNS Worker deployed successfully");
   } catch (error) {
     console.error("❌ DNS Worker deployment failed:", error);
