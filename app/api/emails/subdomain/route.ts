@@ -214,14 +214,14 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Failed to create subdomain email:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "创建子域名邮箱失败", stack: error instanceof Error ? error.stack : undefined },
+      { error: error instanceof Error ? error.message : "创建子域名邮箱失败" },
       { status: 500 }
     )
   }
   } catch (outerError) {
     console.error("FATAL POST handler error:", outerError)
     return NextResponse.json(
-      { error: "Internal crash: " + (outerError instanceof Error ? outerError.message : String(outerError)), stack: outerError instanceof Error ? outerError.stack : undefined },
+      { error: "Internal crash: " + (outerError instanceof Error ? outerError.message : String(outerError)) },
       { status: 500 }
     )
   }
