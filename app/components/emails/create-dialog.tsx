@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Copy, Plus, RefreshCw, Globe, ChevronRight, Shuffle } from "lucide-react"
+import { Copy, Plus, Globe, ChevronRight, Shuffle } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { nanoid } from "nanoid"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -88,12 +88,14 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
     }
   }, [allDomains, selectedDomain])
 
-  // 随机生成的候选域名：排除顶级域名（如 com、net），包含所有二级及以上域名
+  // 随机候选域名：排除有子域名的根域名，只从子域名（及无子域名的独立根域名）中随机
   const randomCandidates = useMemo(() => {
-    return allDomains.filter(d => d.split(".").length >= 2)
-  }, [allDomains])
-
-  const generateRandomName = () => setEmailName(nanoid(8))
+    // 找出有子域名的根域名，排除它们
+    const rootsWithChildren = new Set(
+      domainGroups.filter(g => g.subdomains.length > 0).map(g => g.root)
+    )
+    return allDomains.filter(d => !rootsWithChildren.has(d))
+  }, [allDomains, domainGroups])
 
   const randomAll = () => {
     const candidates = randomCandidates.length > 0 ? randomCandidates : allDomains
@@ -182,19 +184,7 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
         <div className="space-y-4 py-4">
           {/* Domain selection - hierarchical */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm text-muted-foreground">{t("domain")}</Label>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={randomAll}
-                type="button"
-                className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-primary"
-              >
-                <Shuffle className="w-3 h-3" />
-                {t("randomAll")}
-              </Button>
-            </div>
+            <Label className="text-sm text-muted-foreground">{t("domain")}</Label>
             <div className="max-h-[200px] overflow-y-auto rounded-lg border border-border/60">
               <div className="space-y-0">
                 {domainGroups.map((group) => (
@@ -267,11 +257,11 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
               <Button
                 variant="outline"
                 size="icon"
-                onClick={generateRandomName}
+                onClick={randomAll}
                 type="button"
-                title={t("namePlaceholder")}
+                title={t("randomAll")}
               >
-                <RefreshCw className="w-4 h-4" />
+                <Shuffle className="w-4 h-4" />
               </Button>
             </div>
           </div>
