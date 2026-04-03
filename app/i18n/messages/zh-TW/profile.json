@@ -119,7 +119,22 @@
     "save": "儲存設定",
     "saving": "儲存中...",
     "saveSuccess": "設定儲存成功",
-    "saveFailed": "儲存設定失敗"
+    "saveFailed": "儲存設定失敗",
+    "domainExists": "網域已存在",
+    "domainAdded": "網域已新增",
+    "domainInputPlaceholder": "輸入網域，如 example.com",
+    "domainInputHint": "新增網域時會自動查詢 Cloudflare Zone ID",
+    "lookingUpZone": "正在查詢 Zone ID...",
+    "zoneNotFound": "Zone ID 查詢失敗",
+    "removeDomain": "移除網域",
+    "noDomains": "尚未設定網域",
+    "subdomainPlaceholder": "輸入子網域前綴",
+    "subdomainInvalid": "子網域格式不正確，只允許字母、數字和連字符",
+    "subdomainCreated": "子網域已建立",
+    "subdomainCreateFailed": "建立子網域失敗",
+    "subdomainDeleted": "子網域已刪除",
+    "subdomainDeleteFailed": "刪除子網域失敗",
+    "deleteSubdomain": "刪除子網域"
   },
   "promote": {
     "title": "角色管理",

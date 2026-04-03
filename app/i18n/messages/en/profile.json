@@ -119,7 +119,22 @@
     "save": "Save Configuration",
     "saving": "Saving...",
     "saveSuccess": "Configuration saved successfully",
-    "saveFailed": "Failed to save configuration"
+    "saveFailed": "Failed to save configuration",
+    "domainExists": "Domain already exists",
+    "domainAdded": "Domain added",
+    "domainInputPlaceholder": "Enter domain, e.g. example.com",
+    "domainInputHint": "Zone ID will be auto-queried from Cloudflare when adding a domain",
+    "lookingUpZone": "Looking up Zone ID...",
+    "zoneNotFound": "Zone ID lookup failed",
+    "removeDomain": "Remove domain",
+    "noDomains": "No domains configured",
+    "subdomainPlaceholder": "Enter subdomain prefix",
+    "subdomainInvalid": "Invalid subdomain format, only letters, numbers and hyphens allowed",
+    "subdomainCreated": "Subdomain created",
+    "subdomainCreateFailed": "Failed to create subdomain",
+    "subdomainDeleted": "Subdomain deleted",
+    "subdomainDeleteFailed": "Failed to delete subdomain",
+    "deleteSubdomain": "Delete subdomain"
   },
   "promote": {
     "title": "Role Management",

@@ -44,7 +44,9 @@
     "create": "建立",
     "creating": "建立中...",
     "success": "郵箱建立成功",
-    "failed": "建立郵箱失敗"
+    "failed": "建立郵箱失敗",
+    "randomAll": "隨機生成",
+    "preview": "預覽"
   },
   "messages": {
     "received": "收件匣",

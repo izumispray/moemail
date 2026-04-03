@@ -44,7 +44,9 @@
     "create": "생성",
     "creating": "생성 중...",
     "success": "이메일이 성공적으로 생성되었습니다",
-    "failed": "이메일 생성에 실패했습니다"
+    "failed": "이메일 생성에 실패했습니다",
+    "randomAll": "무작위 생성",
+    "preview": "미리보기"
   },
   "messages": {
     "received": "받은 편지함",

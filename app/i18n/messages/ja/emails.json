@@ -44,7 +44,9 @@
     "create": "作成",
     "creating": "作成中...",
     "success": "メールボックスを作成しました",
-    "failed": "メールボックスの作成に失敗しました"
+    "failed": "メールボックスの作成に失敗しました",
+    "randomAll": "ランダム生成",
+    "preview": "プレビュー"
   },
   "messages": {
     "received": "受信箱",

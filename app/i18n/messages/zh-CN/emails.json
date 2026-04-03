@@ -44,7 +44,9 @@
     "create": "创建",
     "creating": "创建中...",
     "success": "邮箱创建成功",
-    "failed": "创建邮箱失败"
+    "failed": "创建邮箱失败",
+    "randomAll": "随机生成",
+    "preview": "预览"
   },
   "messages": {
     "received": "收件箱",

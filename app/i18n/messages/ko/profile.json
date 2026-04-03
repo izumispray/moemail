@@ -119,7 +119,22 @@
     "save": "설정 저장",
     "saving": "저장 중...",
     "saveSuccess": "설정이 성공적으로 저장되었습니다",
-    "saveFailed": "설정 저장에 실패했습니다"
+    "saveFailed": "설정 저장에 실패했습니다",
+    "domainExists": "도메인이 이미 존재합니다",
+    "domainAdded": "도메인이 추가되었습니다",
+    "domainInputPlaceholder": "도메인 입력 (예: example.com)",
+    "domainInputHint": "도메인 추가 시 Cloudflare Zone ID가 자동으로 조회됩니다",
+    "lookingUpZone": "Zone ID 조회 중...",
+    "zoneNotFound": "Zone ID 조회 실패",
+    "removeDomain": "도메인 제거",
+    "noDomains": "구성된 도메인이 없습니다",
+    "subdomainPlaceholder": "서브도메인 접두사 입력",
+    "subdomainInvalid": "서브도메인 형식이 올바르지 않습니다. 영문자, 숫자, 하이픈만 사용 가능합니다",
+    "subdomainCreated": "서브도메인이 생성되었습니다",
+    "subdomainCreateFailed": "서브도메인 생성에 실패했습니다",
+    "subdomainDeleted": "서브도메인이 삭제되었습니다",
+    "subdomainDeleteFailed": "서브도메인 삭제에 실패했습니다",
+    "deleteSubdomain": "서브도메인 삭제"
   },
   "promote": {
     "title": "역할 관리",

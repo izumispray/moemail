@@ -2,14 +2,14 @@
 
 import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
-import { Settings, Plus, Trash2, ChevronRight, Globe, X } from "lucide-react"
+import { Settings, Plus, Trash2, ChevronRight, Globe, Loader2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useState, useEffect, useCallback } from "react"
 import { Role, ROLES } from "@/lib/permissions"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, X } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -42,8 +42,11 @@ export function WebsiteConfigPanel() {
   const [loading, setLoading] = useState(false)
   const [subdomains, setSubdomains] = useState<SubdomainInfo[]>([])
   const [newDomainInput, setNewDomainInput] = useState("")
-  const [newZoneIdInput, setNewZoneIdInput] = useState("")
+  const [addingDomain, setAddingDomain] = useState(false)
   const [domainZones, setDomainZones] = useState<Record<string, string>>({})
+  // Subdomain creation
+  const [newSubdomainInputs, setNewSubdomainInputs] = useState<Record<string, string>>({})
+  const [creatingSubdomain, setCreatingSubdomain] = useState<string | null>(null)
   const { toast } = useToast()
 
   const fetchConfig = useCallback(async () => {
@@ -126,24 +129,47 @@ export function WebsiteConfigPanel() {
     }
   }
 
-  const addDomain = () => {
+  const addDomain = async () => {
     const val = newDomainInput.trim().toLowerCase()
-    const zoneId = newZoneIdInput.trim()
     if (!val) return
-    if (!zoneId) {
-      toast({ title: "请填写 Zone ID", description: "可在 Cloudflare Dashboard 的域名概览页找到", variant: "destructive" })
-      return
-    }
+
     const list = emailDomains ? emailDomains.split(",").filter(Boolean) : []
     if (list.includes(val)) {
-      toast({ title: "域名已存在", variant: "destructive" })
+      toast({ title: t("domainExists"), variant: "destructive" })
       return
     }
-    list.push(val)
-    setEmailDomains(list.join(","))
-    setDomainZones(prev => ({ ...prev, [val]: zoneId }))
-    setNewDomainInput("")
-    setNewZoneIdInput("")
+
+    setAddingDomain(true)
+    try {
+      // Auto-query Zone ID via DNS Worker
+      const res = await fetch("/api/domains/find-zone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: val }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json() as { error: string }
+        toast({
+          title: t("zoneNotFound"),
+          description: data.error,
+          variant: "destructive",
+        })
+        return
+      }
+
+      const { zoneId } = await res.json() as { zoneId: string; zoneName: string }
+
+      list.push(val)
+      setEmailDomains(list.join(","))
+      setDomainZones(prev => ({ ...prev, [val]: zoneId }))
+      setNewDomainInput("")
+      toast({ title: t("domainAdded"), description: `Zone ID: ${zoneId.substring(0, 8)}...` })
+    } catch {
+      toast({ title: t("zoneNotFound"), variant: "destructive" })
+    } finally {
+      setAddingDomain(false)
+    }
   }
 
   const removeDomain = (domain: string) => {
@@ -156,19 +182,59 @@ export function WebsiteConfigPanel() {
     })
   }
 
+  const createSubdomain = async (rootDomain: string) => {
+    const prefix = newSubdomainInputs[rootDomain]?.trim().toLowerCase()
+    if (!prefix) return
+
+    // Validate format
+    const subdomainRegex = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
+    if (!subdomainRegex.test(prefix)) {
+      toast({ title: t("subdomainInvalid"), variant: "destructive" })
+      return
+    }
+
+    setCreatingSubdomain(rootDomain)
+    try {
+      const res = await fetch("/api/domains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subdomain: prefix, domain: rootDomain }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json() as { error: string }
+        toast({
+          title: t("subdomainCreateFailed"),
+          description: data.error,
+          variant: "destructive",
+        })
+        return
+      }
+
+      toast({ title: t("subdomainCreated"), description: `${prefix}.${rootDomain}` })
+      setNewSubdomainInputs(prev => ({ ...prev, [rootDomain]: "" }))
+      fetchSubdomains()
+      fetchConfig()
+    } catch {
+      toast({ title: t("subdomainCreateFailed"), variant: "destructive" })
+    } finally {
+      setCreatingSubdomain(null)
+    }
+  }
+
   const deleteSubdomain = async (id: string) => {
     try {
       const res = await fetch(`/api/domains/${id}`, { method: "DELETE" })
       if (res.ok) {
-        toast({ title: "子域名已删除" })
+        toast({ title: t("subdomainDeleted") })
         fetchSubdomains()
         fetchConfig()
       } else {
         const data = await res.json() as { error: string }
-        toast({ title: "删除失败", description: data.error, variant: "destructive" })
+        toast({ title: t("subdomainDeleteFailed"), description: data.error, variant: "destructive" })
       }
     } catch {
-      toast({ title: "删除失败", variant: "destructive" })
+      toast({ title: t("subdomainDeleteFailed"), variant: "destructive" })
     }
   }
 
@@ -211,6 +277,10 @@ export function WebsiteConfigPanel() {
           {/* 基础域名列表（每个一行，下挂子域名） */}
           <div className="space-y-1">
             {baseDomains.map((domain) => {
+              // Only show root domains (not subdomains that have a parent in the list)
+              const isChild = baseDomains.some(other => other !== domain && domain.endsWith(`.${other}`))
+              if (isChild) return null
+
               const subs = getSubdomainsForBase(domain)
               return (
                 <div key={domain} className="rounded-lg border border-border/60 overflow-hidden">
@@ -228,7 +298,7 @@ export function WebsiteConfigPanel() {
                       type="button"
                       className="text-muted-foreground hover:text-destructive transition-colors p-0.5"
                       onClick={() => removeDomain(domain)}
-                      title="移除域名"
+                      title={t("removeDomain")}
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -258,7 +328,7 @@ export function WebsiteConfigPanel() {
                             type="button"
                             className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-0.5"
                             onClick={() => deleteSubdomain(sub.id)}
-                            title="删除子域名"
+                            title={t("deleteSubdomain")}
                           >
                             <Trash2 className="w-3 h-3" />
                           </button>
@@ -266,37 +336,67 @@ export function WebsiteConfigPanel() {
                       ))}
                     </div>
                   )}
+
+                  {/* 添加子域名的内联表单 */}
+                  <div className="border-t border-border/40 px-3 py-1.5 pl-8">
+                    <div className="flex items-center gap-2">
+                      <Plus className="w-3 h-3 shrink-0 opacity-40" />
+                      <Input
+                        value={newSubdomainInputs[domain] || ""}
+                        onChange={(e) => setNewSubdomainInputs(prev => ({ ...prev, [domain]: e.target.value }))}
+                        placeholder={t("subdomainPlaceholder")}
+                        className="h-7 text-xs flex-1"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            createSubdomain(domain)
+                          }
+                        }}
+                        disabled={creatingSubdomain === domain}
+                      />
+                      <span className="text-xs text-muted-foreground opacity-60">.{domain}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0"
+                        onClick={() => createSubdomain(domain)}
+                        disabled={creatingSubdomain === domain}
+                      >
+                        {creatingSubdomain === domain ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Plus className="w-3 h-3" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               )
             })}
 
             {baseDomains.length === 0 && (
               <div className="text-xs text-muted-foreground py-3 text-center border border-dashed rounded-lg">
-                暂无域名配置
+                {t("noDomains")}
               </div>
             )}
           </div>
 
-          {/* 添加新域名 */}
+          {/* 添加新主域名（不再需要 Zone ID 输入） */}
           <div className="space-y-2">
             <div className="flex gap-2">
               <Input
                 value={newDomainInput}
                 onChange={(e) => setNewDomainInput(e.target.value)}
-                placeholder={"输入域名，如 example.com"}
+                placeholder={t("domainInputPlaceholder")}
                 className="text-sm"
-              />
-              <Input
-                value={newZoneIdInput}
-                onChange={(e) => setNewZoneIdInput(e.target.value)}
-                placeholder={"Cloudflare Zone ID"}
-                className="text-sm font-mono"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault()
                     addDomain()
                   }
                 }}
+                disabled={addingDomain}
               />
               <Button
                 type="button"
@@ -304,11 +404,18 @@ export function WebsiteConfigPanel() {
                 size="icon"
                 onClick={addDomain}
                 className="shrink-0"
+                disabled={addingDomain}
               >
-                <Plus className="w-4 h-4" />
+                {addingDomain ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4" />
+                )}
               </Button>
             </div>
-            <p className="text-[11px] text-muted-foreground">Zone ID 可在 Cloudflare Dashboard → 域名概览页右侧找到</p>
+            <p className="text-[11px] text-muted-foreground">
+              {addingDomain ? t("lookingUpZone") : t("domainInputHint")}
+            </p>
           </div>
         </div>
 
@@ -404,4 +511,4 @@ export function WebsiteConfigPanel() {
       </div>
     </div>
   )
-} 
+}
