@@ -88,11 +88,17 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
     }
   }, [allDomains, selectedDomain])
 
+  // 随机生成的候选域名：排除顶级域名（如 com、net），包含所有二级及以上域名
+  const randomCandidates = useMemo(() => {
+    return allDomains.filter(d => d.split(".").length >= 2)
+  }, [allDomains])
+
   const generateRandomName = () => setEmailName(nanoid(8))
 
   const randomAll = () => {
-    if (allDomains.length > 0) {
-      const randomDomain = allDomains[Math.floor(Math.random() * allDomains.length)]
+    const candidates = randomCandidates.length > 0 ? randomCandidates : allDomains
+    if (candidates.length > 0) {
+      const randomDomain = candidates[Math.floor(Math.random() * candidates.length)]
       setSelectedDomain(randomDomain)
     }
     setEmailName(nanoid(8))
