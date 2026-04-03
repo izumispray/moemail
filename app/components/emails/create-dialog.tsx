@@ -7,13 +7,16 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Copy, Plus, Globe, ChevronRight, Shuffle } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { nanoid } from "nanoid"
+import { customAlphabet } from "nanoid"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { EXPIRY_OPTIONS } from "@/types/email"
 import { useCopy } from "@/hooks/use-copy"
 import { useConfig } from "@/hooks/use-config"
 import { cn } from "@/lib/utils"
+
+// 只用小写字母和数字生成邮箱前缀
+const nanoid = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 8)
 
 interface CreateDialogProps {
   onEmailCreated: () => void
@@ -103,7 +106,7 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
       const randomDomain = candidates[Math.floor(Math.random() * candidates.length)]
       setSelectedDomain(randomDomain)
     }
-    setEmailName(nanoid(8))
+    setEmailName(nanoid())
   }
 
   const copyEmailAddress = () => {
