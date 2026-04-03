@@ -92,28 +92,31 @@ export function WebsiteConfigPanel() {
     fetchSubdomains()
   }, [fetchConfig, fetchSubdomains])
 
+  // 核心保存函数，支持传入覆盖值（用于添加域名后立即保存）
+  const saveConfig = async (overrides?: { emailDomains?: string; domainZones?: Record<string, string> }) => {
+    const res = await fetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        defaultRole, 
+        emailDomains: overrides?.emailDomains ?? emailDomains,
+        adminContact,
+        maxEmails: maxEmails || EMAIL_CONFIG.MAX_ACTIVE_EMAILS.toString(),
+        domainZones: overrides?.domainZones ?? domainZones,
+        turnstile: {
+          enabled: turnstileEnabled,
+          siteKey: turnstileSiteKey,
+          secretKey: turnstileSecretKey
+        }
+      }),
+    })
+    if (!res.ok) throw new Error(t("saveFailed"))
+  }
+
   const handleSave = async () => {
     setLoading(true)
     try {
-      const res = await fetch("/api/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          defaultRole, 
-          emailDomains,
-          adminContact,
-          maxEmails: maxEmails || EMAIL_CONFIG.MAX_ACTIVE_EMAILS.toString(),
-          domainZones,
-          turnstile: {
-            enabled: turnstileEnabled,
-            siteKey: turnstileSiteKey,
-            secretKey: turnstileSecretKey
-          }
-        }),
-      })
-
-      if (!res.ok) throw new Error(t("saveFailed"))
-
+      await saveConfig()
       toast({
         title: t("saveSuccess"),
         description: t("saveSuccess"),
@@ -160,10 +163,16 @@ export function WebsiteConfigPanel() {
 
       const { zoneId } = await res.json() as { zoneId: string; zoneName: string }
 
+      // 更新本地 state
       list.push(val)
-      setEmailDomains(list.join(","))
-      setDomainZones(prev => ({ ...prev, [val]: zoneId }))
+      const newEmailDomains = list.join(",")
+      const newDomainZonesVal = { ...domainZones, [val]: zoneId }
+      setEmailDomains(newEmailDomains)
+      setDomainZones(newDomainZonesVal)
       setNewDomainInput("")
+
+      // 立即保存到后端，避免创建子域名时找不到 Zone ID
+      await saveConfig({ emailDomains: newEmailDomains, domainZones: newDomainZonesVal })
       toast({ title: t("domainAdded"), description: `Zone ID: ${zoneId.substring(0, 8)}...` })
     } catch {
       toast({ title: t("zoneNotFound"), variant: "destructive" })
