@@ -69,10 +69,15 @@ export async function POST(request: Request) {
     })
 
     if (existingEmail) {
-      return NextResponse.json(
-        { error: "该邮箱地址已被使用" },
-        { status: 409 }
-      )
+      // 如果邮箱已过期，先删除旧记录再允许重新创建
+      if (existingEmail.expiresAt < new Date()) {
+        await db.delete(emails).where(eq(emails.id, existingEmail.id))
+      } else {
+        return NextResponse.json(
+          { error: "该邮箱地址已被使用" },
+          { status: 409 }
+        )
+      }
     }
 
     const now = new Date()
