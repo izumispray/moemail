@@ -9,8 +9,22 @@ import { getUserRole } from "@/lib/auth"
 import { ROLES } from "@/lib/permissions"
 import { buildFullDomain, normalizeDomainName, validateSubdomainPrefix } from "@/lib/domain-utils"
 import { DOMAIN_CLEANUP_POLICIES, getCleanupAfter, isDomainCleanupPolicy } from "@/lib/domain-cleanup"
+import { bestEffortDeprovisionDns, getProvisionedDnsRecordIds } from "@/lib/dns-worker-client"
 
 export const runtime = "edge"
+
+async function removeDomainFromKv(env: Env, domainName: string) {
+  const currentDomains = await env.SITE_CONFIG.get("EMAIL_DOMAINS")
+  if (!currentDomains) return
+
+  const normalizedDomainName = normalizeDomainName(domainName)
+  const domainList = currentDomains
+    .split(",")
+    .map((domain) => normalizeDomainName(domain))
+    .filter((domain) => domain && domain !== normalizedDomainName)
+
+  await env.SITE_CONFIG.put("EMAIL_DOMAINS", domainList.join(","))
+}
 
 /**
  * POST /api/emails/subdomain
@@ -183,14 +197,20 @@ export async function POST(request: Request) {
       txtRecordId: string | null
       error?: string
     }
+    const provisionedRecordIds = getProvisionedDnsRecordIds(dnsResult)
 
     if (!dnsResult.success) {
+      await bestEffortDeprovisionDns(env, zoneId, provisionedRecordIds, fullDomain)
       return NextResponse.json(
         { error: `DNS 记录创建失败: ${dnsResult.error}` },
         { status: 502 }
       )
     }
 
+    let createdDomainId: string | null = null
+    let domainAddedToKv = false
+
+    try {
     const now = new Date()
     const expiresAt = body.expiryTime && body.expiryTime > 0
       ? new Date(now.getTime() + body.expiryTime)
@@ -214,6 +234,7 @@ export async function POST(request: Request) {
         createdBy: userId,
       })
       .returning()
+    createdDomainId = newDomain.id
 
 
     // 3. 更新 KV 中的 EMAIL_DOMAINS，追加子域名
@@ -223,6 +244,7 @@ export async function POST(request: Request) {
       : []
     if (!domainList.includes(fullDomain)) {
       domainList.push(fullDomain)
+      domainAddedToKv = true
       await env.SITE_CONFIG.put("EMAIL_DOMAINS", domainList.join(","))
     }
 
@@ -245,6 +267,39 @@ export async function POST(request: Request) {
       },
       { status: 201 }
     )
+    } catch (postProvisionError) {
+      const dnsRolledBack = await bestEffortDeprovisionDns(env, zoneId, provisionedRecordIds, fullDomain)
+      let kvRolledBack = !domainAddedToKv
+
+      if (dnsRolledBack && domainAddedToKv) {
+        try {
+          await removeDomainFromKv(env, fullDomain)
+          kvRolledBack = true
+        } catch (kvError) {
+          console.warn(`Failed to rollback KV domain ${fullDomain}:`, kvError)
+        }
+      }
+
+      if (createdDomainId) {
+        try {
+          if (dnsRolledBack && kvRolledBack) {
+            await db.delete(domains).where(eq(domains.id, createdDomainId))
+          } else {
+            await db.update(domains)
+              .set({
+                status: "cleanup_failed",
+                cleanupPolicy: DOMAIN_CLEANUP_POLICIES.AUTO,
+                cleanupAfter: new Date(),
+              })
+              .where(eq(domains.id, createdDomainId))
+          }
+        } catch (dbError) {
+          console.warn(`Failed to rollback domain row ${fullDomain}:`, dbError)
+        }
+      }
+
+      throw postProvisionError
+    }
   } catch (error) {
     console.error("Failed to create subdomain email:", error)
     return NextResponse.json(

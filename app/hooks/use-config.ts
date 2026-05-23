@@ -29,7 +29,7 @@ const useConfigStore = create<ConfigStore>((set) => ({
   fetch: async () => {
     try {
       set({ loading: true, error: null })
-      const res = await fetch("/api/config")
+      const res = await fetch("/api/config", { cache: "no-store" })
       if (!res.ok) throw new Error("获取配置失败")
       const data = await res.json() as Config
       set({
@@ -56,12 +56,13 @@ const useConfigStore = create<ConfigStore>((set) => ({
 
 export function useConfig() {
   const store = useConfigStore()
+  const { config, loading, fetch } = store
 
   useEffect(() => {
-    if (!store.config && !store.loading) {
-      store.fetch()
+    if (!config && !loading) {
+      fetch()
     }
-  }, [store.config, store.loading])
+  }, [config, fetch, loading])
 
   return store
 }

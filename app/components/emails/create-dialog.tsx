@@ -68,7 +68,7 @@ function getLeafDomains(domains: string[]): string[] {
 }
 
 export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
-  const { config } = useConfig()
+  const { config, fetch: fetchConfig } = useConfig()
   const t = useTranslations("emails.create")
   const tList = useTranslations("emails.list")
   const tCommon = useTranslations("common.actions")
@@ -93,6 +93,12 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
   const randomCandidates = useMemo(() => {
     return getLeafDomains(allDomains)
   }, [allDomains])
+
+  useEffect(() => {
+    if (open) {
+      fetchConfig()
+    }
+  }, [fetchConfig, open])
 
   // Set initial selected domain
   useEffect(() => {

@@ -67,7 +67,7 @@ export function WebsiteConfigPanel() {
   const { toast } = useToast()
 
   const fetchConfig = useCallback(async () => {
-    const res = await fetch("/api/config")
+    const res = await fetch("/api/config", { cache: "no-store" })
     if (res.ok) {
       const data = await res.json() as { 
         defaultRole: Exclude<Role, typeof ROLES.EMPEROR>,
@@ -96,7 +96,7 @@ export function WebsiteConfigPanel() {
 
   const fetchSubdomains = useCallback(async () => {
     try {
-      const res = await fetch("/api/domains")
+      const res = await fetch("/api/domains", { cache: "no-store" })
       if (res.ok) {
         const data = await res.json() as { domains: SubdomainInfo[] }
         setSubdomains(data.domains || [])
@@ -109,6 +109,9 @@ export function WebsiteConfigPanel() {
   useEffect(() => {
     fetchConfig()
     fetchSubdomains()
+    const intervalId = window.setInterval(fetchSubdomains, 60_000)
+
+    return () => window.clearInterval(intervalId)
   }, [fetchConfig, fetchSubdomains])
 
   // 核心保存函数，支持传入覆盖值（用于添加域名后立即保存）

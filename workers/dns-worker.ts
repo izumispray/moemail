@@ -34,6 +34,12 @@ interface CloudflareApiResponse<T = unknown> {
   result: T
 }
 
+interface DnsDeleteResult {
+  id: string
+  success: boolean
+  error?: string
+}
+
 type SubdomainValidationResult =
   | { success: true; value: string; fullDomain: string }
   | { success: false; error: string }
@@ -185,6 +191,40 @@ async function setCatchAllToWorker(
   }
 }
 
+async function deleteDnsRecords(
+  zoneId: string,
+  apiToken: string,
+  recordIds: string[]
+): Promise<DnsDeleteResult[]> {
+  const results: DnsDeleteResult[] = []
+  const uniqueRecordIds = Array.from(new Set(recordIds.filter(Boolean)))
+
+  for (const recordId of uniqueRecordIds) {
+    try {
+      await cfFetch(
+        `/zones/${zoneId}/dns_records/${recordId}`,
+        apiToken,
+        { method: "DELETE" }
+      )
+      results.push({ id: recordId, success: true })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (NOT_FOUND_PATTERN.test(message)) {
+        results.push({ id: recordId, success: true })
+        continue
+      }
+
+      results.push({
+        id: recordId,
+        success: false,
+        error: message,
+      })
+    }
+  }
+
+  return results
+}
+
 // ---- Handlers ----
 
 async function handleProvision(body: any, apiToken: string, emailWorkerName?: string): Promise<Response> {
@@ -273,6 +313,10 @@ async function handleProvision(body: any, apiToken: string, emailWorkerName?: st
       catchAllSet,
     })
   } catch (error) {
+    const provisionedRecordIds = [...mxRecordIds, txtRecordId].filter((id): id is string => Boolean(id))
+    const rollbackResults = await deleteDnsRecords(normalizedZoneId, apiToken, provisionedRecordIds)
+    const rolledBack = rollbackResults.every((result) => result.success)
+
     return Response.json({
       success: false,
       domain: fullDomain,
@@ -280,6 +324,8 @@ async function handleProvision(body: any, apiToken: string, emailWorkerName?: st
       txtRecordId,
       emailRoutingEnabled,
       catchAllSet,
+      rolledBack,
+      rollbackResults,
       error: error instanceof Error ? error.message : String(error),
     }, { status: 502 })
   }
@@ -292,30 +338,7 @@ async function handleDeprovision(body: any, apiToken: string): Promise<Response>
   }
   const normalizedZoneId = zoneId.trim()
 
-  const results: Array<{ id: string; success: boolean; error?: string }> = []
-
-  for (const recordId of recordIds) {
-    try {
-      await cfFetch(
-        `/zones/${normalizedZoneId}/dns_records/${recordId}`,
-        apiToken,
-        { method: "DELETE" }
-      )
-      results.push({ id: recordId, success: true })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (NOT_FOUND_PATTERN.test(message)) {
-        results.push({ id: recordId, success: true })
-        continue
-      }
-
-      results.push({
-        id: recordId,
-        success: false,
-        error: message,
-      })
-    }
-  }
+  const results = await deleteDnsRecords(normalizedZoneId, apiToken, recordIds)
 
   const allSuccess = results.every((r) => r.success)
   return Response.json({ success: allSuccess, results })
