@@ -34,8 +34,61 @@ interface ActiveEmailSummary {
   latestExpiresAt: number | null
 }
 
+interface DnsWorkerResult {
+  success?: boolean
+  error?: string
+  results?: Array<{ id: string; success: boolean; error?: string }>
+}
+
 function normalizeDomainName(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, "")
+}
+
+function describeError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    }
+  }
+
+  return {
+    message: String(error),
+  }
+}
+
+function truncateForLog(value: string, maxLength = 1000): string {
+  if (value.length <= maxLength) {
+    return value
+  }
+
+  return `${value.slice(0, maxLength)}...`
+}
+
+function parseJsonForLog<T>(value: string): T | null {
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return null
+  }
+}
+
+function summarizeUrlForLog(value: string) {
+  try {
+    const url = new URL(value)
+    return {
+      origin: url.origin,
+      pathname: url.pathname,
+      hasSearch: url.search.length > 0,
+    }
+  } catch (error) {
+    return {
+      origin: "invalid-url",
+      pathname: "invalid-url",
+      parseError: describeError(error).message,
+    }
+  }
 }
 
 function parseRecordIds(domain: DomainRow): string[] {
@@ -44,8 +97,12 @@ function parseRecordIds(domain: DomainRow): string[] {
   if (domain.mxRecordIds) {
     try {
       recordIds.push(...(JSON.parse(domain.mxRecordIds) as string[]))
-    } catch {
-      console.warn(`Invalid MX record IDs for ${domain.name}`)
+    } catch (error) {
+      console.warn("Invalid MX record IDs", {
+        domain: domain.name,
+        domainId: domain.id,
+        error: describeError(error),
+      })
     }
   }
 
@@ -130,7 +187,18 @@ async function deprovisionDomainDns(env: Env, domain: DomainRow, recordIds: stri
     throw new Error("DNS Worker is not configured")
   }
 
-  const response = await fetch(`${env.DNS_WORKER_URL}/deprovision`, {
+  const requestUrl = `${env.DNS_WORKER_URL}/deprovision`
+  const endpoint = summarizeUrlForLog(requestUrl)
+
+  console.log("DNS deprovision request", {
+    domain: domain.name,
+    domainId: domain.id,
+    zoneId: domain.zoneId,
+    recordCount: recordIds.length,
+    endpoint,
+  })
+
+  const response = await fetch(requestUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -142,10 +210,43 @@ async function deprovisionDomainDns(env: Env, domain: DomainRow, recordIds: stri
     }),
   })
 
-  const result = await response.json().catch(() => null) as { success?: boolean; error?: string } | null
+  const responseBody = await response.text().catch((error) => {
+    console.error("Failed to read DNS deprovision response body", {
+      domain: domain.name,
+      domainId: domain.id,
+      endpoint,
+      error: describeError(error),
+    })
+    return ""
+  })
+  const result = parseJsonForLog<DnsWorkerResult>(responseBody)
+
   if (!response.ok || !result?.success) {
+    console.error("DNS deprovision response failed", {
+      domain: domain.name,
+      domainId: domain.id,
+      zoneId: domain.zoneId,
+      recordCount: recordIds.length,
+      endpoint,
+      status: response.status,
+      statusText: response.statusText,
+      contentType: response.headers.get("content-type"),
+      cfRay: response.headers.get("cf-ray"),
+      responseBody: truncateForLog(responseBody),
+      parsedResult: result,
+    })
     throw new Error(result?.error || `DNS cleanup failed with status ${response.status}`)
   }
+
+  console.log("DNS deprovision response succeeded", {
+    domain: domain.name,
+    domainId: domain.id,
+    zoneId: domain.zoneId,
+    recordCount: recordIds.length,
+    endpoint,
+    status: response.status,
+    cfRay: response.headers.get("cf-ray"),
+  })
 }
 
 async function removeDomainFromKv(env: Env, domainName: string) {
@@ -190,8 +291,21 @@ async function cleanupAutoDomains(env: Env, now: number) {
   const domains = candidates.results ?? []
   let cleaned = 0
 
+  console.log("Auto domain cleanup candidates loaded", {
+    count: domains.length,
+    limit: CLEANUP_CONFIG.DOMAIN_BATCH_SIZE,
+    now: new Date(now).toISOString(),
+    firstCandidate: domains[0]
+      ? {
+          domain: domains[0].name,
+          status: domains[0].status,
+        }
+      : null,
+  })
+
   for (const domain of domains) {
     let dnsCleaned = false
+    let recordCount = 0
 
     try {
       const markResult = await env.DB
@@ -212,11 +326,19 @@ async function cleanupAutoDomains(env: Env, now: number) {
       const activeEmails = await getActiveEmailSummary(env, domain.name, now)
       if (activeEmails.count > 0) {
         await setDomainActive(env, domain.id, getCleanupAfterFromExpiry(activeEmails.latestExpiresAt))
-        console.log(`Skipped ${domain.name}: ${activeEmails.count} active email(s) remain`)
+        console.log("Skipped auto domain cleanup because active emails remain", {
+          domain: domain.name,
+          domainId: domain.id,
+          activeEmailCount: activeEmails.count,
+          latestExpiresAt: activeEmails.latestExpiresAt
+            ? new Date(activeEmails.latestExpiresAt).toISOString()
+            : null,
+        })
         continue
       }
 
       const recordIds = parseRecordIds(domain)
+      recordCount = recordIds.length
       await deprovisionDomainDns(env, domain, recordIds)
       dnsCleaned = true
       await clearDomainRecordIds(env, domain.id)
@@ -229,14 +351,29 @@ async function cleanupAutoDomains(env: Env, now: number) {
         .run()
 
       cleaned += 1
-      console.log(`Cleaned auto domain ${domain.name} with ${deletedEmails} expired email(s)`)
+      console.log("Cleaned auto domain", {
+        domain: domain.name,
+        domainId: domain.id,
+        deletedEmails,
+        recordCount,
+      })
     } catch (error) {
-      console.error(`Failed to cleanup auto domain ${domain.name}:`, error)
+      console.error(`Failed to cleanup auto domain ${domain.name}:`, {
+        domain: domain.name,
+        domainId: domain.id,
+        previousStatus: domain.status,
+        recordCount,
+        error: describeError(error),
+      })
       if (dnsCleaned) {
         try {
           await clearDomainRecordIds(env, domain.id)
         } catch (clearError) {
-          console.error(`Failed to clear DNS record IDs for ${domain.name}:`, clearError)
+          console.error(`Failed to clear DNS record IDs for ${domain.name}:`, {
+            domain: domain.name,
+            domainId: domain.id,
+            error: describeError(clearError),
+          })
         }
       }
       await setDomainStatus(env, domain.id, "cleanup_failed")
@@ -247,10 +384,17 @@ async function cleanupAutoDomains(env: Env, now: number) {
 }
 
 const main = {
-  async scheduled(_: ScheduledEvent, env: Env) {
+  async scheduled(event: ScheduledEvent, env: Env) {
     const now = Date.now()
 
     try {
+      console.log("Cleanup scheduled run started", {
+        scheduledTime: new Date(event.scheduledTime).toISOString(),
+        now: new Date(now).toISOString(),
+        deleteExpiredEmails: CLEANUP_CONFIG.DELETE_EXPIRED_EMAILS,
+        deleteAutoDomains: CLEANUP_CONFIG.DELETE_AUTO_DOMAINS,
+      })
+
       if (CLEANUP_CONFIG.DELETE_EXPIRED_EMAILS) {
         const result = await env.DB
           .prepare(`
@@ -271,8 +415,15 @@ const main = {
       }
 
       await cleanupAutoDomains(env, now)
+      console.log("Cleanup scheduled run completed", {
+        scheduledTime: new Date(event.scheduledTime).toISOString(),
+        now: new Date(Date.now()).toISOString(),
+      })
     } catch (error) {
-      console.error("Failed to cleanup:", error)
+      console.error("Failed to cleanup:", {
+        scheduledTime: new Date(event.scheduledTime).toISOString(),
+        error: describeError(error),
+      })
       throw error
     }
   }
