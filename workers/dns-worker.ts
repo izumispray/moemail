@@ -44,6 +44,31 @@ type SubdomainValidationResult =
   | { success: true; value: string; fullDomain: string }
   | { success: false; error: string }
 
+function describeError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    }
+  }
+
+  return {
+    message: String(error),
+  }
+}
+
+function getRequestLogContext(request: Request) {
+  const url = new URL(request.url)
+
+  return {
+    method: request.method,
+    path: url.pathname,
+    cfRay: request.headers.get("cf-ray"),
+    callerWorker: request.headers.get("cf-worker"),
+  }
+}
+
 function normalizeDomainName(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, "")
 }
@@ -210,9 +235,20 @@ async function deleteDnsRecords(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (NOT_FOUND_PATTERN.test(message)) {
+        console.warn("DNS record already absent during delete", {
+          zoneId,
+          recordId,
+          error: message,
+        })
         results.push({ id: recordId, success: true })
         continue
       }
+
+      console.error("DNS record delete failed", {
+        zoneId,
+        recordId,
+        error: message,
+      })
 
       results.push({
         id: recordId,
@@ -290,7 +326,11 @@ async function handleProvision(body: any, apiToken: string, emailWorkerName?: st
     const enableResult = await enableEmailRouting(normalizedZoneId, apiToken)
     emailRoutingEnabled = enableResult.success
     if (!enableResult.success) {
-      console.warn(`Email Routing enable warning: ${enableResult.error}`)
+      console.warn("Email Routing enable warning", {
+        domain: fullDomain,
+        zoneId: normalizedZoneId,
+        error: enableResult.error,
+      })
     }
 
     // 4. Set catch-all rule to route emails to Email Worker
@@ -298,11 +338,28 @@ async function handleProvision(body: any, apiToken: string, emailWorkerName?: st
       const catchAllResult = await setCatchAllToWorker(normalizedZoneId, apiToken, emailWorkerName)
       catchAllSet = catchAllResult.success
       if (!catchAllResult.success) {
-        console.warn(`Catch-all rule warning: ${catchAllResult.error}`)
+        console.warn("Catch-all rule warning", {
+          domain: fullDomain,
+          zoneId: normalizedZoneId,
+          emailWorkerName,
+          error: catchAllResult.error,
+        })
       }
     } else {
-      console.warn("EMAIL_WORKER_NAME not configured, skipping catch-all rule")
+      console.warn("EMAIL_WORKER_NAME not configured, skipping catch-all rule", {
+        domain: fullDomain,
+        zoneId: normalizedZoneId,
+      })
     }
+
+    console.log("DNS provision completed", {
+      domain: fullDomain,
+      zoneId: normalizedZoneId,
+      mxRecordCount: mxRecordIds.length,
+      hasTxtRecord: Boolean(txtRecordId),
+      emailRoutingEnabled,
+      catchAllSet,
+    })
 
     return Response.json({
       success: true,
@@ -316,6 +373,19 @@ async function handleProvision(body: any, apiToken: string, emailWorkerName?: st
     const provisionedRecordIds = [...mxRecordIds, txtRecordId].filter((id): id is string => Boolean(id))
     const rollbackResults = await deleteDnsRecords(normalizedZoneId, apiToken, provisionedRecordIds)
     const rolledBack = rollbackResults.every((result) => result.success)
+
+    console.error("DNS provision failed", {
+      domain: fullDomain,
+      zoneId: normalizedZoneId,
+      mxRecordCount: mxRecordIds.length,
+      hasTxtRecord: Boolean(txtRecordId),
+      emailRoutingEnabled,
+      catchAllSet,
+      rollbackRecordCount: provisionedRecordIds.length,
+      rolledBack,
+      rollbackResults,
+      error: describeError(error),
+    })
 
     return Response.json({
       success: false,
@@ -338,9 +408,27 @@ async function handleDeprovision(body: any, apiToken: string): Promise<Response>
   }
   const normalizedZoneId = zoneId.trim()
 
+  console.log("DNS deprovision request received", {
+    zoneId: normalizedZoneId,
+    recordCount: recordIds.length,
+  })
+
   const results = await deleteDnsRecords(normalizedZoneId, apiToken, recordIds)
 
   const allSuccess = results.every((r) => r.success)
+  if (allSuccess) {
+    console.log("DNS deprovision completed", {
+      zoneId: normalizedZoneId,
+      recordCount: recordIds.length,
+    })
+  } else {
+    console.error("DNS deprovision completed with failed records", {
+      zoneId: normalizedZoneId,
+      recordCount: recordIds.length,
+      failedResults: results.filter((result) => !result.success),
+    })
+  }
+
   return Response.json({ success: allSuccess, results })
 }
 
@@ -378,6 +466,8 @@ async function handleFindZone(body: any, apiToken: string): Promise<Response> {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const requestContext = getRequestLogContext(request)
+
     // CORS
     if (request.method === "OPTIONS") {
       return new Response(null, {
@@ -393,10 +483,12 @@ export default {
     const authHeader = request.headers.get("Authorization")
     const expectedToken = `Bearer ${env.DNS_WORKER_SECRET}`
     if (!authHeader || authHeader !== expectedToken) {
+      console.warn("DNS worker unauthorized request", requestContext)
       return Response.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     if (request.method !== "POST") {
+      console.warn("DNS worker method not allowed", requestContext)
       return Response.json({ error: "Method not allowed" }, { status: 405 })
     }
 
@@ -408,8 +500,11 @@ export default {
       const apiToken = env.CLOUDFLARE_API_TOKEN
 
       if (!apiToken) {
+        console.error("DNS worker missing Cloudflare API token", requestContext)
         return Response.json({ error: "CLOUDFLARE_API_TOKEN not configured" }, { status: 500 })
       }
+
+      console.log("DNS worker request accepted", requestContext)
 
       switch (path) {
         case "/provision":
@@ -419,9 +514,15 @@ export default {
         case "/find-zone":
           return handleFindZone(body, apiToken)
         default:
+          console.warn("DNS worker route not found", requestContext)
           return Response.json({ error: "Not found" }, { status: 404 })
       }
     } catch (error) {
+      console.error("DNS worker request failed", {
+        ...requestContext,
+        error: describeError(error),
+      })
+
       return Response.json(
         { error: error instanceof Error ? error.message : "Internal error" },
         { status: 500 }
