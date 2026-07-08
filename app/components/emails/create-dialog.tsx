@@ -113,10 +113,13 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
   }, [allDomains, randomCandidates, selectedDomain])
 
   const randomAll = () => {
-    const candidates = randomCandidates.length > 0 ? randomCandidates : allDomains
-    if (candidates.length > 0) {
-      const randomDomain = candidates[Math.floor(Math.random() * candidates.length)]
-      setSelectedDomain(randomDomain)
+    const hasValidDomain = selectedDomain && allDomains.includes(selectedDomain)
+    if (!hasValidDomain) {
+      const candidates = randomCandidates.length > 0 ? randomCandidates : allDomains
+      if (candidates.length > 0) {
+        const randomDomain = candidates[Math.floor(Math.random() * candidates.length)]
+        setSelectedDomain(randomDomain)
+      }
     }
     setEmailName(nanoid())
   }
