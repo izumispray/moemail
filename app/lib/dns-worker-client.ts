@@ -19,10 +19,11 @@ export async function bestEffortDeprovisionDns(
   env: DnsWorkerEnv,
   zoneId: string,
   recordIds: string[],
-  context: string
+  context: string,
+  findByDomainWhenEmpty = false
 ): Promise<boolean> {
   const uniqueRecordIds = Array.from(new Set(recordIds.filter(Boolean)))
-  if (uniqueRecordIds.length === 0) {
+  if (uniqueRecordIds.length === 0 && !findByDomainWhenEmpty) {
     return true
   }
 
@@ -38,7 +39,7 @@ export async function bestEffortDeprovisionDns(
         "Content-Type": "application/json",
         Authorization: `Bearer ${env.DNS_WORKER_SECRET}`,
       },
-      body: JSON.stringify({ zoneId, recordIds: uniqueRecordIds }),
+      body: JSON.stringify({ zoneId, recordIds: uniqueRecordIds, domain: context }),
     })
 
     const result = await response.json().catch(() => null) as { success?: boolean; error?: string } | null

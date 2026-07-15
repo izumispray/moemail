@@ -16,6 +16,8 @@ import { useConfig } from "@/hooks/use-config"
 import { cn } from "@/lib/utils"
 import { parseEmailAddress, type EmailAddressValidationError } from "@/lib/email-address"
 import { normalizeDomainName } from "@/lib/domain-utils"
+import { useUserRole } from "@/hooks/use-user-role"
+import { ROLES } from "@/lib/permissions"
 
 // 只用小写字母和数字生成邮箱前缀
 const nanoid = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 8)
@@ -71,6 +73,7 @@ function getLeafDomains(domains: string[]): string[] {
 
 export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
   const { config, fetch: fetchConfig } = useConfig()
+  const { role } = useUserRole()
   const t = useTranslations("emails.create")
   const tList = useTranslations("emails.list")
   const tCommon = useTranslations("common.actions")
@@ -97,8 +100,12 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
   }, [allDomains])
 
   const parsedEmailAddress = useMemo(() => {
-    return parseEmailAddress(emailAddress, allDomains)
-  }, [allDomains, emailAddress])
+    const provisionableZones = role === ROLES.EMPEROR ? config?.domainZones : undefined
+    return parseEmailAddress(emailAddress, allDomains, provisionableZones)
+  }, [allDomains, config?.domainZones, emailAddress, role])
+
+  const willCreateSubdomain = parsedEmailAddress.success &&
+    !allDomains.includes(parsedEmailAddress.domain)
 
   useEffect(() => {
     if (open) {
@@ -144,7 +151,7 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
   }
 
   const randomAll = () => {
-    const currentDomain = getConfiguredDomain(emailAddress)
+    const currentDomain = parsedEmailAddress.success ? parsedEmailAddress.domain : ""
     const candidates = randomCandidates.length > 0 ? randomCandidates : allDomains
     const fallbackDomain = allDomains.includes(selectedDomain)
       ? selectedDomain
@@ -187,7 +194,8 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
       return
     }
 
-    const parsedAddress = parseEmailAddress(emailAddress, allDomains)
+    const provisionableZones = role === ROLES.EMPEROR ? config?.domainZones : undefined
+    const parsedAddress = parseEmailAddress(emailAddress, allDomains, provisionableZones)
     if (!parsedAddress.success) {
       toast({
         title: tList("error"),
@@ -224,6 +232,7 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
         description: t("success")
       })
       onEmailCreated()
+      await fetchConfig()
       setOpen(false)
       setEmailAddress("")
     } catch {
@@ -377,6 +386,11 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
               <span className="text-gray-400">...</span>
             )}
           </div>
+          {willCreateSubdomain && (
+            <p className="text-xs text-primary">
+              {t("autoSubdomainHint", { domain: parsedEmailAddress.domain })}
+            </p>
+          )}
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={() => setOpen(false)} disabled={loading}>

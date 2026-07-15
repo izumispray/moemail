@@ -1,4 +1,5 @@
 import { normalizeDomainName } from "./domain-utils"
+import { resolveEmailDomain } from "./auto-domain"
 
 const MAX_LOCAL_PART_LENGTH = 64
 const MAX_EMAIL_ADDRESS_LENGTH = 254
@@ -73,7 +74,8 @@ export function validateEmailLocalPart(value: unknown): EmailLocalPartValidation
 /** Parse and normalize a complete mailbox address against configured domains. */
 export function parseEmailAddress(
   value: unknown,
-  allowedDomains: readonly string[]
+  allowedDomains: readonly string[],
+  domainZones: Readonly<Record<string, string>> = {}
 ): EmailAddressValidationResult {
   if (typeof value !== "string") {
     return { success: false, error: "invalidFormat" }
@@ -92,9 +94,8 @@ export function parseEmailAddress(
 
   const rawDomain = value.slice(firstAt + 1)
   const domain = normalizeDomainName(rawDomain)
-  const normalizedAllowedDomains = new Set(allowedDomains.map(normalizeDomainName))
-
-  if (!domain || !normalizedAllowedDomains.has(domain)) {
+  const domainResolution = resolveEmailDomain(domain, allowedDomains, domainZones)
+  if (domainResolution.kind === "invalid") {
     return { success: false, error: "domainNotAllowed" }
   }
 

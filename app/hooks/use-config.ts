@@ -10,6 +10,7 @@ interface Config {
   defaultRole: Exclude<Role, typeof ROLES.EMPEROR>
   emailDomains: string
   emailDomainsArray: string[]
+  domainZones: Record<string, string>
   adminContact: string
   maxEmails: number
   registrationEnabled: boolean
@@ -39,6 +40,7 @@ const useConfigStore = create<ConfigStore>((set) => ({
           emailDomainsArray: Array.from(new Set(
             data.emailDomains.split(",").map(domain => normalizeDomainName(domain)).filter(Boolean)
           )),
+          domainZones: data.domainZones || {},
           adminContact: data.adminContact || "",
           maxEmails: Number(data.maxEmails) || EMAIL_CONFIG.MAX_ACTIVE_EMAILS,
           registrationEnabled: data.registrationEnabled ?? true

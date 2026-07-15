@@ -57,6 +57,30 @@ describe("parseEmailAddress", () => {
     })
   })
 
+  it("accepts an unconfigured descendant that can be auto-provisioned", () => {
+    expect(
+      parseEmailAddress("User@NNNN.mail.example.com", domains, {
+        "example.com": "zone-root",
+      })
+    ).toEqual({
+      success: true,
+      localPart: "User",
+      domain: "nnnn.mail.example.com",
+      address: "User@nnnn.mail.example.com",
+    })
+  })
+
+  it("still rejects an unconfigured domain outside the provisionable zones", () => {
+    expect(
+      parseEmailAddress("user@unknown.example.net", domains, {
+        "example.com": "zone-root",
+      })
+    ).toEqual({
+      success: false,
+      error: "domainNotAllowed",
+    })
+  })
+
   it("rejects an address longer than 254 characters", () => {
     const domain = `${"d".repeat(63)}.${"d".repeat(63)}.${"d".repeat(58)}.com`
     expect(domain.length).toBe(190)

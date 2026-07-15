@@ -444,7 +444,6 @@ async function handleDeprovision(body: any, apiToken: string): Promise<Response>
 
   const results = await deleteDnsRecords(normalizedZoneId, apiToken, recordIds)
   const directSuccess = recordIds.length > 0 && results.every((r) => r.success)
-
   if (directSuccess) {
     console.log("DNS deprovision completed", {
       zoneId: normalizedZoneId,
@@ -459,7 +458,6 @@ async function handleDeprovision(body: any, apiToken: string): Promise<Response>
       const fallbackResults = await deleteDnsRecords(normalizedZoneId, apiToken, fallbackRecordIds)
       // No matching records is also a successful idempotent cleanup.
       const fallbackSuccess = fallbackResults.every((r) => r.success)
-
       if (fallbackSuccess) {
         console.log("DNS deprovision completed", {
           domain: normalizeDomainName(domain),

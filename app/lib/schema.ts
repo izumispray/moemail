@@ -161,7 +161,7 @@ export const domains = sqliteTable('domain', {
   zoneId: text('zone_id').notNull(),                  // CF Zone ID
   mxRecordIds: text('mx_record_ids'),                 // JSON array of CF DNS record IDs
   txtRecordId: text('txt_record_id'),                 // CF DNS record ID for SPF TXT
-  status: text('status').notNull().default('active'),  // active / cleanup_pending / cleanup_failed
+  status: text('status').notNull().default('active'),  // provisioning / active / cleanup_pending / cleanup_failed
   cleanupPolicy: text('cleanup_policy')
     .$type<DomainCleanupPolicy>()
     .notNull()
