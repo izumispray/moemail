@@ -11,6 +11,7 @@ import { getUserRole } from "@/lib/auth"
 import { ROLES } from "@/lib/permissions"
 import { normalizeDomainName } from "@/lib/domain-utils"
 import { DOMAIN_CLEANUP_POLICIES, getCleanupAfter } from "@/lib/domain-cleanup"
+import { validateEmailLocalPart } from "@/lib/email-address"
 
 export const runtime = "edge"
 
@@ -79,7 +80,22 @@ export async function POST(request: Request) {
       )
     }
 
-    const address = `${name || nanoid(8)}@${normalizedDomain}`
+    const localPart = name || nanoid(8)
+    const localPartValidation = validateEmailLocalPart(localPart)
+    if (!localPartValidation.success) {
+      return NextResponse.json(
+        { error: "无效的邮箱前缀", code: localPartValidation.error },
+        { status: 400 }
+      )
+    }
+
+    const address = `${localPartValidation.value}@${normalizedDomain}`
+    if (address.length > 254) {
+      return NextResponse.json(
+        { error: "邮箱地址长度不能超过 254 个字符", code: "addressTooLong" },
+        { status: 400 }
+      )
+    }
     const existingEmail = await db.query.emails.findFirst({
       where: eq(sql`LOWER(${emails.address})`, address.toLowerCase())
     })

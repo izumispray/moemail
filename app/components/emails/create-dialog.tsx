@@ -14,6 +14,8 @@ import { EXPIRY_OPTIONS } from "@/types/email"
 import { useCopy } from "@/hooks/use-copy"
 import { useConfig } from "@/hooks/use-config"
 import { cn } from "@/lib/utils"
+import { parseEmailAddress, type EmailAddressValidationError } from "@/lib/email-address"
+import { normalizeDomainName } from "@/lib/domain-utils"
 
 // 只用小写字母和数字生成邮箱前缀
 const nanoid = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 8)
@@ -74,7 +76,7 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
   const tCommon = useTranslations("common.actions")
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [emailName, setEmailName] = useState("")
+  const [emailAddress, setEmailAddress] = useState("")
   const [selectedDomain, setSelectedDomain] = useState("")
   const [expiryTime, setExpiryTime] = useState(EXPIRY_OPTIONS[1].value.toString())
   const { toast } = useToast()
@@ -94,6 +96,10 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
     return getLeafDomains(allDomains)
   }, [allDomains])
 
+  const parsedEmailAddress = useMemo(() => {
+    return parseEmailAddress(emailAddress, allDomains)
+  }, [allDomains, emailAddress])
+
   useEffect(() => {
     if (open) {
       fetchConfig()
@@ -107,41 +113,85 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
       return
     }
 
-    if (!selectedDomain || !allDomains.includes(selectedDomain)) {
+    if (
+      (!selectedDomain || !allDomains.includes(selectedDomain)) &&
+      !emailAddress.includes("@")
+    ) {
       setSelectedDomain(randomCandidates[0] || allDomains[0])
     }
-  }, [allDomains, randomCandidates, selectedDomain])
+  }, [allDomains, emailAddress, randomCandidates, selectedDomain])
+
+  const getConfiguredDomain = (value: string) => {
+    const firstAt = value.indexOf("@")
+    if (firstAt < 0 || firstAt !== value.lastIndexOf("@")) return ""
+
+    const domain = normalizeDomainName(value.slice(firstAt + 1))
+    return allDomains.includes(domain) ? domain : ""
+  }
+
+  const updateEmailAddress = (value: string) => {
+    setEmailAddress(value)
+    const domain = getConfiguredDomain(value)
+    if (domain || value.includes("@")) setSelectedDomain(domain)
+  }
+
+  const selectDomain = (domain: string) => {
+    const firstAt = emailAddress.indexOf("@")
+    const localPart = firstAt >= 0 ? emailAddress.slice(0, firstAt) : emailAddress
+
+    setSelectedDomain(domain)
+    setEmailAddress(`${localPart}@${domain}`)
+  }
 
   const randomAll = () => {
-    const hasValidDomain = selectedDomain && allDomains.includes(selectedDomain)
-    if (!hasValidDomain) {
-      const candidates = randomCandidates.length > 0 ? randomCandidates : allDomains
-      if (candidates.length > 0) {
-        const randomDomain = candidates[Math.floor(Math.random() * candidates.length)]
-        setSelectedDomain(randomDomain)
-      }
-    }
-    setEmailName(nanoid())
+    const currentDomain = getConfiguredDomain(emailAddress)
+    const candidates = randomCandidates.length > 0 ? randomCandidates : allDomains
+    const fallbackDomain = allDomains.includes(selectedDomain)
+      ? selectedDomain
+      : candidates[0]
+    const domain = currentDomain || fallbackDomain
+
+    if (!domain) return
+    setSelectedDomain(domain)
+    setEmailAddress(`${nanoid()}@${domain}`)
   }
 
   const copyEmailAddress = () => {
-    copyToClipboard(`${emailName}@${selectedDomain}`)
+    if (parsedEmailAddress.success) {
+      copyToClipboard(parsedEmailAddress.address)
+    }
+  }
+
+  const getValidationMessage = (error: EmailAddressValidationError) => {
+    switch (error) {
+      case "invalidFormat":
+        return t("invalidFormat")
+      case "localPartTooLong":
+        return t("localPartTooLong")
+      case "addressTooLong":
+        return t("addressTooLong")
+      case "domainNotAllowed":
+        return t("unknownDomain")
+      default:
+        return t("invalidLocalPart")
+    }
   }
 
   const createEmail = async () => {
-    if (!emailName.trim()) {
+    if (!emailAddress) {
       toast({
         title: tList("error"),
-        description: t("namePlaceholder"),
+        description: t("addressRequired"),
         variant: "destructive"
       })
       return
     }
 
-    if (!selectedDomain) {
+    const parsedAddress = parseEmailAddress(emailAddress, allDomains)
+    if (!parsedAddress.success) {
       toast({
         title: tList("error"),
-        description: t("domainPlaceholder"),
+        description: getValidationMessage(parsedAddress.error),
         variant: "destructive"
       })
       return
@@ -153,8 +203,8 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: emailName,
-          domain: selectedDomain,
+          name: parsedAddress.localPart,
+          domain: parsedAddress.domain,
           expiryTime: parseInt(expiryTime)
         })
       })
@@ -175,7 +225,7 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
       })
       onEmailCreated()
       setOpen(false)
-      setEmailName("")
+      setEmailAddress("")
     } catch {
       toast({
         title: tList("error"),
@@ -215,7 +265,7 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
                         "hover:bg-primary/5",
                         selectedDomain === group.root && "bg-primary/10 text-primary font-medium"
                       )}
-                      onClick={() => setSelectedDomain(group.root)}
+                      onClick={() => selectDomain(group.root)}
                     >
                       <Globe className="w-3.5 h-3.5 shrink-0 text-primary/60" />
                       <span className="truncate">{group.root}</span>
@@ -236,7 +286,7 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
                           "hover:bg-primary/5",
                           selectedDomain === sub && "bg-primary/10 text-primary font-medium"
                         )}
-                        onClick={() => setSelectedDomain(sub)}
+                        onClick={() => selectDomain(sub)}
                       >
                         <ChevronRight className="w-3 h-3 shrink-0 opacity-40" />
                         <span className="font-mono text-xs truncate">
@@ -262,15 +312,17 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
             </div>
           </div>
 
-          {/* Email name input */}
+          {/* Full email address input */}
           <div className="space-y-2">
-            <Label className="text-sm text-muted-foreground">{t("name")}</Label>
+            <Label className="text-sm text-muted-foreground">{t("address")}</Label>
             <div className="flex gap-2">
               <Input
-                value={emailName}
-                onChange={(e) => setEmailName(e.target.value)}
-                placeholder={t("namePlaceholder")}
+                value={emailAddress}
+                onChange={(e) => updateEmailAddress(e.target.value)}
+                placeholder={t("addressPlaceholder")}
                 className="flex-1"
+                inputMode="email"
+                autoComplete="off"
               />
               <Button
                 variant="outline"
@@ -309,10 +361,10 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
           {/* Preview */}
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span className="shrink-0">{t("preview")}:</span>
-            {emailName && selectedDomain ? (
+            {parsedEmailAddress.success ? (
               <div className="flex items-center gap-2 min-w-0">
                 <span className="truncate font-mono text-xs bg-muted/50 px-2 py-1 rounded">
-                  {`${emailName}@${selectedDomain}`}
+                  {parsedEmailAddress.address}
                 </span>
                 <div
                   className="shrink-0 cursor-pointer hover:text-primary transition-colors"
