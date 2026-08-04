@@ -35,6 +35,11 @@
       "getEmails": "メールボックス一覧を取得",
       "getMessages": "メール一覧を取得",
       "getMessage": "メールを1件取得",
+      "getSentMessages": "送信済みメール一覧を取得",
+      "deleteMessage": "メールを削除",
+      "deleteEmail": "メールボックスを削除",
+      "getSendPermission": "送信権限を確認",
+      "sendEmail": "メールを送信",
       "createEmailShare": "メールボックス共有リンクを作成",
       "getEmailShares": "メールボックス共有リンク一覧を取得",
       "deleteEmailShare": "メールボックス共有リンクを削除",
@@ -50,12 +55,14 @@
       "createSubdomainEmail": "サブドメインメールを作成",
       "getSubdomainEmails": "サブドメインメール一覧を取得",
       "deleteSubdomainEmail": "サブドメインメールを削除",
+      "getEmailServiceConfig": "送信サービス設定を取得",
+      "updateEmailServiceConfig": "送信サービス設定を更新",
       "notes": "注意:",
       "note1": "YOUR_API_KEY を実際の API Key に置き換えてください",
       "note2": "/api/config エンドポイントで利用可能なメールボックスドメインなどのシステム設定を取得できます",
       "note3": "emailId はメールボックスの一意な識別子です",
       "note4": "messageId はメールの一意な識別子です",
-      "note5": "expiryTime はメールボックスの有効期間（ミリ秒）です。利用可能な値: 3600000（1時間）、86400000（1日）、604800000（7日）、0（永久）",
+      "note5": "expiryTime はメールボックスの有効期間（ミリ秒）です。利用可能な値: 3600000（1時間）、86400000（1日）、259200000（3日）、0（永久）",
       "note6": "domain はメールボックスのドメインで、/api/config エンドポイントで利用可能な一覧を取得できます",
       "note7": "cursor はページネーション用で、前回のレスポンスから nextCursor を取得してください",
       "note8": "すべてのリクエストには X-API-Key ヘッダーが必要です",
@@ -63,7 +70,8 @@
       "note10": "shareId は共有記録の一意な識別子です",
       "note11": "domainId はサブドメイン記録の一意な識別子で、/api/domains または /api/emails/subdomain から取得できます",
       "note12": "ドメイン管理とサブドメインメールの API には Emperor ロールと設定済みの Cloudflare DNS Worker が必要です",
-      "note13": "POST /api/config は設定全体を保存するため、先に GET /api/config で現在値を取得してから変更してください"
+      "note13": "POST /api/config は設定全体を保存するため、先に GET /api/config で現在値を取得してから変更してください",
+      "note14": "送信関連の API には管理者による Resend の有効化が必要で、ユーザーロールの日次上限が適用されます"
     }
   },
   "emailService": {

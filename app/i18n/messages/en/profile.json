@@ -35,6 +35,11 @@
       "getEmails": "Get Email List",
       "getMessages": "Get Message List",
       "getMessage": "Get Single Message",
+      "getSentMessages": "Get Sent Message List",
+      "deleteMessage": "Delete Message",
+      "deleteEmail": "Delete Email",
+      "getSendPermission": "Check Send Permission",
+      "sendEmail": "Send Email",
       "createEmailShare": "Create Email Share Link",
       "getEmailShares": "Get Email Share Links",
       "deleteEmailShare": "Delete Email Share Link",
@@ -50,12 +55,14 @@
       "createSubdomainEmail": "Create Subdomain Email",
       "getSubdomainEmails": "Get Subdomain Email List",
       "deleteSubdomainEmail": "Delete Subdomain Email",
+      "getEmailServiceConfig": "Get Email Service Config",
+      "updateEmailServiceConfig": "Update Email Service Config",
       "notes": "Notes:",
       "note1": "Replace YOUR_API_KEY with your actual API Key",
       "note2": "/api/config endpoint provides system configuration including available email domains",
       "note3": "emailId is the unique identifier for an email",
       "note4": "messageId is the unique identifier for a message",
-      "note5": "expiryTime is the validity period in milliseconds: 3600000 (1 hour), 86400000 (1 day), 604800000 (7 days), 0 (permanent)",
+      "note5": "expiryTime is the validity period in milliseconds: 3600000 (1 hour), 86400000 (1 day), 259200000 (3 days), 0 (permanent)",
       "note6": "domain is the email domain, get available domains from /api/config endpoint",
       "note7": "cursor is for pagination, get nextCursor from previous response",
       "note8": "All requests require X-API-Key header",
@@ -63,7 +70,8 @@
       "note10": "shareId is the unique identifier for a share record",
       "note11": "domainId is the unique identifier for a subdomain record, available from /api/domains or /api/emails/subdomain",
       "note12": "Domain management and subdomain email endpoints require the Emperor role and a configured Cloudflare DNS Worker",
-      "note13": "POST /api/config saves the full configuration, so GET /api/config first and edit from the current values"
+      "note13": "POST /api/config saves the full configuration, so GET /api/config first and edit from the current values",
+      "note14": "Sending endpoints require Resend to be enabled by an administrator and are subject to the user's daily role limit"
     }
   },
   "emailService": {

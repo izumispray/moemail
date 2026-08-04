@@ -35,6 +35,11 @@
       "getEmails": "取得郵箱清單",
       "getMessages": "取得郵件清單",
       "getMessage": "取得單封郵件",
+      "getSentMessages": "取得已發送郵件清單",
+      "deleteMessage": "刪除郵件",
+      "deleteEmail": "刪除郵箱",
+      "getSendPermission": "檢查發件權限",
+      "sendEmail": "發送郵件",
       "createEmailShare": "建立郵箱分享連結",
       "getEmailShares": "取得郵箱分享連結清單",
       "deleteEmailShare": "刪除郵箱分享連結",
@@ -50,12 +55,14 @@
       "createSubdomainEmail": "建立子網域郵箱",
       "getSubdomainEmails": "取得子網域郵箱清單",
       "deleteSubdomainEmail": "刪除子網域郵箱",
+      "getEmailServiceConfig": "取得發件服務設定",
+      "updateEmailServiceConfig": "更新發件服務設定",
       "notes": "注意：",
       "note1": "請將 YOUR_API_KEY 替換為你的實際 API Key",
       "note2": "/api/config 介面可取得系統設定，包括可用的郵箱網域清單",
       "note3": "emailId 是郵箱的唯一識別碼",
       "note4": "messageId 是郵件的唯一識別碼",
-      "note5": "expiryTime 是郵箱的有效期（毫秒），可選值：3600000（1 小時）、86400000（1 天）、604800000（7 天）、0（永久）",
+      "note5": "expiryTime 是郵箱的有效期（毫秒），可選值：3600000（1 小時）、86400000（1 天）、259200000（3 天）、0（永久）",
       "note6": "domain 是郵箱網域，可透過 /api/config 介面取得可用網域清單",
       "note7": "cursor 用於分頁，從上一次請求的回應中取得 nextCursor",
       "note8": "所有請求都需要包含 X-API-Key 請求標頭",
@@ -63,7 +70,8 @@
       "note10": "shareId 是分享紀錄的唯一識別碼",
       "note11": "domainId 是子網域紀錄的唯一識別碼，可從 /api/domains 或 /api/emails/subdomain 取得",
       "note12": "網域管理和子網域郵箱介面需要皇帝角色，且 Cloudflare DNS Worker 已正確設定",
-      "note13": "POST /api/config 會完整儲存設定，呼叫前建議先 GET /api/config 並基於目前值修改"
+      "note13": "POST /api/config 會完整儲存設定，呼叫前建議先 GET /api/config 並基於目前值修改",
+      "note14": "發件相關介面需要管理員已啟用 Resend 發件服務，並受使用者角色每日限額限制"
     }
   },
   "emailService": {

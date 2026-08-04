@@ -35,6 +35,11 @@
       "getEmails": "获取邮箱列表",
       "getMessages": "获取邮件列表",
       "getMessage": "获取单封邮件",
+      "getSentMessages": "获取已发送邮件列表",
+      "deleteMessage": "删除邮件",
+      "deleteEmail": "删除邮箱",
+      "getSendPermission": "检查发件权限",
+      "sendEmail": "发送邮件",
       "createEmailShare": "创建邮箱分享链接",
       "getEmailShares": "获取邮箱分享链接列表",
       "deleteEmailShare": "删除邮箱分享链接",
@@ -50,12 +55,14 @@
       "createSubdomainEmail": "创建子域名邮箱",
       "getSubdomainEmails": "获取子域名邮箱列表",
       "deleteSubdomainEmail": "删除子域名邮箱",
+      "getEmailServiceConfig": "获取发件服务配置",
+      "updateEmailServiceConfig": "更新发件服务配置",
       "notes": "注意：",
       "note1": "请将 YOUR_API_KEY 替换为你的实际 API Key",
       "note2": "/api/config 接口可获取系统配置，包括可用的邮箱域名列表",
       "note3": "emailId 是邮箱的唯一标识符",
       "note4": "messageId 是邮件的唯一标识符",
-      "note5": "expiryTime 是邮箱的有效期（毫秒），可选值：3600000（1小时）、86400000（1天）、604800000（7天）、0（永久）",
+      "note5": "expiryTime 是邮箱的有效期（毫秒），可选值：3600000（1小时）、86400000（1天）、259200000（3天）、0（永久）",
       "note6": "domain 是邮箱域名，可通过 /api/config 接口获取可用域名列表",
       "note7": "cursor 用于分页，从上一次请求的响应中获取 nextCursor",
       "note8": "所有请求都需要包含 X-API-Key 请求头",
@@ -63,7 +70,8 @@
       "note10": "shareId 是分享记录的唯一标识符",
       "note11": "domainId 是子域名记录的唯一标识符，可从 /api/domains 或 /api/emails/subdomain 获取",
       "note12": "域名管理和子域名邮箱接口需要皇帝角色，并且 Cloudflare DNS Worker 已正确配置",
-      "note13": "POST /api/config 会完整保存配置，调用前建议先 GET /api/config 并基于当前值修改"
+      "note13": "POST /api/config 会完整保存配置，调用前建议先 GET /api/config 并基于当前值修改",
+      "note14": "发件相关接口需要管理员已启用 Resend 发件服务，并受用户角色每日限额限制"
     }
   },
   "emailService": {
