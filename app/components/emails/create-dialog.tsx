@@ -8,9 +8,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Copy, Plus, Globe, ChevronRight, Shuffle } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { customAlphabet } from "nanoid"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { EXPIRY_OPTIONS } from "@/types/email"
+import { ExpiryPicker } from "./expiry-picker"
 import { useCopy } from "@/hooks/use-copy"
 import { useConfig } from "@/hooks/use-config"
 import { cn } from "@/lib/utils"
@@ -81,7 +81,7 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
   const [loading, setLoading] = useState(false)
   const [emailAddress, setEmailAddress] = useState("")
   const [selectedDomain, setSelectedDomain] = useState("")
-  const [expiryTime, setExpiryTime] = useState(EXPIRY_OPTIONS[1].value.toString())
+  const [expiryTime, setExpiryTime] = useState(EXPIRY_OPTIONS[1].value)
   const { toast } = useToast()
   const { copyToClipboard } = useCopy()
 
@@ -213,7 +213,7 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
         body: JSON.stringify({
           name: parsedAddress.localPart,
           domain: parsedAddress.domain,
-          expiryTime: parseInt(expiryTime)
+          expiryTime
         })
       })
 
@@ -345,27 +345,7 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
             </div>
           </div>
 
-          {/* Expiry time */}
-          <div className="flex items-center gap-4">
-            <Label className="shrink-0 text-muted-foreground">{t("expiryTime")}</Label>
-            <RadioGroup
-              value={expiryTime}
-              onValueChange={setExpiryTime}
-              className="flex gap-6"
-            >
-              {EXPIRY_OPTIONS.map((option, index) => {
-                const labels = [t("oneHour"), t("oneDay"), t("threeDays"), t("permanent")]
-                return (
-                  <div key={option.value} className="flex items-center gap-2">
-                    <RadioGroupItem value={option.value.toString()} id={option.value.toString()} />
-                    <Label htmlFor={option.value.toString()} className="cursor-pointer text-sm">
-                      {labels[index]}
-                    </Label>
-                  </div>
-                )
-              })}
-            </RadioGroup>
-          </div>
+          <ExpiryPicker value={expiryTime} onChange={setExpiryTime} />
 
           {/* Preview */}
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -396,7 +376,7 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
           <Button variant="outline" onClick={() => setOpen(false)} disabled={loading}>
             {tCommon("cancel")}
           </Button>
-          <Button onClick={createEmail} disabled={loading}>
+          <Button onClick={createEmail} disabled={loading || expiryTime < 0}>
             {loading ? t("creating") : t("create")}
           </Button>
         </div>

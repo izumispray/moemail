@@ -58,7 +58,7 @@
 
 - 🔒 **隐私保护**：保护您的真实邮箱地址，远离垃圾邮件和不必要的订阅
 - ⚡ **实时收件**：自动轮询，即时接收邮件通知
-- ⏱️ **灵活有效期**：支持 1 小时、24 小时、3 天或永久有效
+- ⏱️ **灵活有效期**：支持预设、自定义时长、永久有效及到期前续约
 - 🎨 **主题切换**：支持亮色和暗色模式
 - 📱 **响应式设计**：完美适配桌面和移动设备
 - 🔄 **自动清理**：自动清理过期的邮箱和邮件
@@ -462,13 +462,13 @@ Content-Type: application/json
 
 {
   "name": "test",
-  "expiryTime": 3600000,
+  "expiryTime": 5400000,
   "domain": "moemail.app"
 }
 ```
 参数说明：
 - `name`: 邮箱前缀，可选
-- `expiryTime`: 有效期（毫秒），可选值：3600000（1小时）、86400000（1天）、604800000（7天）、0（永久）
+- `expiryTime`: 有效期（毫秒），支持任意非负安全整数；例如 5400000 表示 90 分钟，0 表示永久
 - `domain`: 邮箱域名，可通过 `/api/config` 接口获取
 
 返回响应：
@@ -553,6 +553,17 @@ DELETE /api/emails/{emailId}
 ```
 响应字段说明：
 - `success`: 删除操作是否成功
+
+#### 续约邮箱
+```http
+POST /api/emails/{emailId}/renew
+Content-Type: application/json
+
+{
+  "expiryTime": 86400000
+}
+```
+仅未过期的非永久邮箱可续约。正数会累加到当前到期时间，`0` 会转为永久；已过期或永久邮箱返回 `409`。
 
 #### 获取单封邮件内容
 ```http
@@ -746,7 +757,7 @@ curl -X POST https://your-domain.com/api/emails/generate \
   -H "Content-Type: application/json" \
   -d '{
     "name": "test",
-    "expiryTime": 3600000,
+    "expiryTime": 5400000,
     "domain": "moemail.app"
   }'
 ```

@@ -15,6 +15,21 @@
     "backToEmailList": "← 이메일 목록으로 돌아가기",
     "backToMessageList": "← 메시지 목록으로 돌아가기"
   },
+  "expiry": {
+    "label": "유효 기간",
+    "oneHour": "1시간",
+    "oneDay": "1일",
+    "threeDays": "3일",
+    "permanent": "영구",
+    "custom": "사용자 지정",
+    "customAmount": "사용자 지정 유효 기간",
+    "minutes": "분",
+    "hours": "시간",
+    "days": "일",
+    "invalidCustom": "1분 이상의 정수를 입력하세요",
+    "preview": "예상 만료",
+    "permanentPreview": "영구 유효"
+  },
   "list": {
     "emailCount": "{count}/{max} 이메일",
     "emailCountUnlimited": "{count}/∞ 이메일",
@@ -56,6 +71,18 @@
     "failed": "이메일 생성에 실패했습니다",
     "randomAll": "무작위 생성",
     "preview": "미리보기"
+  },
+  "renew": {
+    "action": "연장",
+    "title": "이메일 연장",
+    "currentExpiry": "현재 만료 시간",
+    "cancel": "취소",
+    "confirm": "연장 확인",
+    "renewing": "연장 중...",
+    "success": "이메일이 연장되었습니다",
+    "failed": "이메일 연장에 실패했습니다",
+    "expired": "만료된 이메일은 연장할 수 없습니다",
+    "permanent": "영구 이메일은 연장이 필요하지 않습니다"
   },
   "messages": {
     "received": "받은 편지함",

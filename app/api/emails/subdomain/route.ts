@@ -10,6 +10,7 @@ import { ROLES } from "@/lib/permissions"
 import { buildFullDomain, normalizeDomainName, validateSubdomainPrefix } from "@/lib/domain-utils"
 import { DOMAIN_CLEANUP_POLICIES, getCleanupAfter, isDomainCleanupPolicy } from "@/lib/domain-cleanup"
 import { bestEffortDeprovisionDns, getProvisionedDnsRecordIds } from "@/lib/dns-worker-client"
+import { resolveEmailExpiry } from "@/lib/email-expiry"
 
 export const runtime = "edge"
 
@@ -77,6 +78,14 @@ export async function POST(request: Request) {
       domain: string
       expiryTime?: number  // 过期时间（毫秒），0 或不传 = 永不过期
       cleanupPolicy?: string
+    }
+
+    const expiry = resolveEmailExpiry(body.expiryTime ?? 0)
+    if (!expiry.success) {
+      return NextResponse.json(
+        { error: expiry.error, code: expiry.code },
+        { status: 400 }
+      )
     }
 
     if (body.cleanupPolicy !== undefined && !isDomainCleanupPolicy(body.cleanupPolicy)) {
@@ -212,9 +221,9 @@ export async function POST(request: Request) {
 
     try {
     const now = new Date()
-    const expiresAt = body.expiryTime && body.expiryTime > 0
-      ? new Date(now.getTime() + body.expiryTime)
-      : new Date("9999-01-01T00:00:00.000Z")
+    const expiresAt = expiry.permanent
+      ? expiry.expiresAt
+      : new Date(now.getTime() + expiry.expiryTime)
     const cleanupAfter = getCleanupAfter(cleanupPolicy, expiresAt)
 
     // 2. D1：保存 domain 记录

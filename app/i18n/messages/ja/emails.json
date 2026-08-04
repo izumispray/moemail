@@ -15,6 +15,21 @@
     "backToEmailList": "← メールボックス一覧に戻る",
     "backToMessageList": "← メッセージ一覧に戻る"
   },
+  "expiry": {
+    "label": "有効期間",
+    "oneHour": "1 時間",
+    "oneDay": "1 日",
+    "threeDays": "3 日",
+    "permanent": "永久",
+    "custom": "カスタム",
+    "customAmount": "カスタム有効期間",
+    "minutes": "分",
+    "hours": "時間",
+    "days": "日",
+    "invalidCustom": "1 分以上の整数を入力してください",
+    "preview": "有効期限予定",
+    "permanentPreview": "永久有効"
+  },
   "list": {
     "emailCount": "{count}/{max} 個のメールボックス",
     "emailCountUnlimited": "{count}/∞ 個のメールボックス",
@@ -56,6 +71,18 @@
     "failed": "メールボックスの作成に失敗しました",
     "randomAll": "ランダム生成",
     "preview": "プレビュー"
+  },
+  "renew": {
+    "action": "延長",
+    "title": "メールボックスを延長",
+    "currentExpiry": "現在の有効期限",
+    "cancel": "キャンセル",
+    "confirm": "延長を確定",
+    "renewing": "延長中...",
+    "success": "メールボックスを延長しました",
+    "failed": "メールボックスの延長に失敗しました",
+    "expired": "期限切れのメールボックスは延長できません",
+    "permanent": "永久メールボックスは延長不要です"
   },
   "messages": {
     "received": "受信箱",

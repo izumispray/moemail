@@ -38,6 +38,7 @@
       "getSentMessages": "Get Sent Message List",
       "deleteMessage": "Delete Message",
       "deleteEmail": "Delete Email",
+      "renewEmail": "Renew Email",
       "getSendPermission": "Check Send Permission",
       "sendEmail": "Send Email",
       "createEmailShare": "Create Email Share Link",
@@ -62,7 +63,7 @@
       "note2": "/api/config endpoint provides system configuration including available email domains",
       "note3": "emailId is the unique identifier for an email",
       "note4": "messageId is the unique identifier for a message",
-      "note5": "expiryTime is the validity period in milliseconds: 3600000 (1 hour), 86400000 (1 day), 259200000 (3 days), 0 (permanent)",
+      "note5": "expiryTime accepts any non-negative safe integer in milliseconds; 0 is permanent, and 5400000 is 90 minutes",
       "note6": "domain is the email domain, get available domains from /api/config endpoint",
       "note7": "cursor is for pagination, get nextCursor from previous response",
       "note8": "All requests require X-API-Key header",
@@ -71,7 +72,8 @@
       "note11": "domainId is the unique identifier for a subdomain record, available from /api/domains or /api/emails/subdomain",
       "note12": "Domain management and subdomain email endpoints require the Emperor role and a configured Cloudflare DNS Worker",
       "note13": "POST /api/config saves the full configuration, so GET /api/config first and edit from the current values",
-      "note14": "Sending endpoints require Resend to be enabled by an administrator and are subject to the user's daily role limit"
+      "note14": "Sending endpoints require Resend to be enabled by an administrator and are subject to the user's daily role limit",
+      "note15": "Renewal only applies to active non-permanent emails; positive values extend the current expiry, 0 makes it permanent, and expired or permanent emails return 409"
     }
   },
   "emailService": {

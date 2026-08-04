@@ -58,7 +58,7 @@ The documentation site contains detailed usage guides, API documentation, deploy
 
 - 🔒 **Privacy Protection**: Protect your real email address from spam and unnecessary subscriptions
 - ⚡ **Real-time Receipt**: Automatic polling, receive email notifications instantly
-- ⏱️ **Flexible Validity**: Supports 1 hour, 24 hours, 3 days, or permanent validity
+- ⏱️ **Flexible Validity**: Presets, custom durations, permanent inboxes, and renewal before expiry
 - 🎨 **Theme Switching**: Supports light and dark modes
 - 📱 **Responsive Design**: Perfectly adapted for desktop and mobile devices
 - 🔄 **Auto Cleanup**: Automatically cleans up expired mailboxes and emails
@@ -458,13 +458,13 @@ Content-Type: application/json
 
 {
   "name": "test",
-  "expiryTime": 3600000,
+  "expiryTime": 5400000,
   "domain": "moemail.app"
 }
 ```
 Params:
 - `name`: Prefix (optional)
-- `expiryTime`: Validity in ms. 3600000(1h), 86400000(24h), 604800000(7d), 0(Permanent)
+- `expiryTime`: Any non-negative safe integer in milliseconds; for example, 5400000 is 90 minutes and 0 is permanent
 - `domain`: From config
 
 Response:
@@ -489,6 +489,17 @@ GET /api/emails/{emailId}?cursor=xxx
 ```http
 DELETE /api/emails/{emailId}
 ```
+
+#### Renew Email
+```http
+POST /api/emails/{emailId}/renew
+Content-Type: application/json
+
+{
+  "expiryTime": 86400000
+}
+```
+Only active, non-permanent emails can be renewed. Positive values extend the current expiry; `0` makes the email permanent. Expired or permanent emails return `409`.
 
 #### Get Single Message
 ```http

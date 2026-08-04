@@ -15,6 +15,21 @@
     "backToEmailList": "← Back to Email List",
     "backToMessageList": "← Back to Message List"
   },
+  "expiry": {
+    "label": "Validity Period",
+    "oneHour": "1 Hour",
+    "oneDay": "1 Day",
+    "threeDays": "3 Days",
+    "permanent": "Permanent",
+    "custom": "Custom",
+    "customAmount": "Custom validity amount",
+    "minutes": "Minutes",
+    "hours": "Hours",
+    "days": "Days",
+    "invalidCustom": "Enter a whole number of at least 1 minute",
+    "preview": "Expected expiry",
+    "permanentPreview": "Never expires"
+  },
   "list": {
     "emailCount": "{count}/{max} emails",
     "emailCountUnlimited": "{count}/∞ emails",
@@ -56,6 +71,18 @@
     "failed": "Failed to create email",
     "randomAll": "Random",
     "preview": "Preview"
+  },
+  "renew": {
+    "action": "Renew",
+    "title": "Renew Email",
+    "currentExpiry": "Current expiry",
+    "cancel": "Cancel",
+    "confirm": "Confirm Renewal",
+    "renewing": "Renewing...",
+    "success": "Email renewed successfully",
+    "failed": "Failed to renew email",
+    "expired": "This email has expired and cannot be renewed",
+    "permanent": "Permanent emails do not need renewal"
   },
   "messages": {
     "received": "Received",

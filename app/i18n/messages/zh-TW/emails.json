@@ -15,6 +15,21 @@
     "backToEmailList": "← 返回郵箱列表",
     "backToMessageList": "← 返回訊息列表"
   },
+  "expiry": {
+    "label": "有效期",
+    "oneHour": "1 小時",
+    "oneDay": "1 天",
+    "threeDays": "3 天",
+    "permanent": "永久",
+    "custom": "自訂",
+    "customAmount": "自訂有效期數值",
+    "minutes": "分鐘",
+    "hours": "小時",
+    "days": "天",
+    "invalidCustom": "請輸入至少 1 分鐘的整數",
+    "preview": "預計到期",
+    "permanentPreview": "永久有效"
+  },
   "list": {
     "emailCount": "{count}/{max} 個郵箱",
     "emailCountUnlimited": "{count}/∞ 個郵箱",
@@ -56,6 +71,18 @@
     "failed": "建立郵箱失敗",
     "randomAll": "隨機生成",
     "preview": "預覽"
+  },
+  "renew": {
+    "action": "續約",
+    "title": "續約郵箱",
+    "currentExpiry": "目前到期時間",
+    "cancel": "取消",
+    "confirm": "確認續約",
+    "renewing": "續約中...",
+    "success": "郵箱續約成功",
+    "failed": "郵箱續約失敗",
+    "expired": "郵箱已過期，無法續約",
+    "permanent": "永久郵箱無需續約"
   },
   "messages": {
     "received": "收件匣",

@@ -15,6 +15,21 @@
     "backToEmailList": "← 返回邮箱列表",
     "backToMessageList": "← 返回消息列表"
   },
+  "expiry": {
+    "label": "有效期",
+    "oneHour": "1 小时",
+    "oneDay": "1 天",
+    "threeDays": "3 天",
+    "permanent": "永久",
+    "custom": "自定义",
+    "customAmount": "自定义有效期数值",
+    "minutes": "分钟",
+    "hours": "小时",
+    "days": "天",
+    "invalidCustom": "请输入至少 1 分钟的整数",
+    "preview": "预计到期",
+    "permanentPreview": "永久有效"
+  },
   "list": {
     "emailCount": "{count}/{max} 个邮箱",
     "emailCountUnlimited": "{count}/∞ 个邮箱",
@@ -56,6 +71,18 @@
     "failed": "创建邮箱失败",
     "randomAll": "随机生成",
     "preview": "预览"
+  },
+  "renew": {
+    "action": "续约",
+    "title": "续约邮箱",
+    "currentExpiry": "当前到期时间",
+    "cancel": "取消",
+    "confirm": "确认续约",
+    "renewing": "续约中...",
+    "success": "邮箱续约成功",
+    "failed": "邮箱续约失败",
+    "expired": "邮箱已过期，无法续约",
+    "permanent": "永久邮箱无需续约"
   },
   "messages": {
     "received": "收件箱",

@@ -38,6 +38,7 @@
       "getSentMessages": "送信済みメール一覧を取得",
       "deleteMessage": "メールを削除",
       "deleteEmail": "メールボックスを削除",
+      "renewEmail": "メールボックスを延長",
       "getSendPermission": "送信権限を確認",
       "sendEmail": "メールを送信",
       "createEmailShare": "メールボックス共有リンクを作成",
@@ -62,7 +63,7 @@
       "note2": "/api/config エンドポイントで利用可能なメールボックスドメインなどのシステム設定を取得できます",
       "note3": "emailId はメールボックスの一意な識別子です",
       "note4": "messageId はメールの一意な識別子です",
-      "note5": "expiryTime はメールボックスの有効期間（ミリ秒）です。利用可能な値: 3600000（1時間）、86400000（1日）、259200000（3日）、0（永久）",
+      "note5": "expiryTime はミリ秒単位の任意の非負の安全な整数を指定できます。0 は永久、5400000 は 90 分です",
       "note6": "domain はメールボックスのドメインで、/api/config エンドポイントで利用可能な一覧を取得できます",
       "note7": "cursor はページネーション用で、前回のレスポンスから nextCursor を取得してください",
       "note8": "すべてのリクエストには X-API-Key ヘッダーが必要です",
@@ -71,7 +72,8 @@
       "note11": "domainId はサブドメイン記録の一意な識別子で、/api/domains または /api/emails/subdomain から取得できます",
       "note12": "ドメイン管理とサブドメインメールの API には Emperor ロールと設定済みの Cloudflare DNS Worker が必要です",
       "note13": "POST /api/config は設定全体を保存するため、先に GET /api/config で現在値を取得してから変更してください",
-      "note14": "送信関連の API には管理者による Resend の有効化が必要で、ユーザーロールの日次上限が適用されます"
+      "note14": "送信関連の API には管理者による Resend の有効化が必要で、ユーザーロールの日次上限が適用されます",
+      "note15": "延長は有効な非永久メールボックスのみ対象です。正数は現在の期限に加算され、0 は永久化し、期限切れまたは永久の場合は 409 を返します"
     }
   },
   "emailService": {

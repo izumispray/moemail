@@ -3,7 +3,6 @@ import { nanoid } from "nanoid"
 import { createDb } from "@/lib/db"
 import { emails, domains } from "@/lib/schema"
 import { eq, and, gt, sql } from "drizzle-orm"
-import { EXPIRY_OPTIONS } from "@/types/email"
 import { EMAIL_CONFIG } from "@/config"
 import { getRequestContext } from "@cloudflare/next-on-pages"
 import { getUserId } from "@/lib/apiKey"
@@ -18,6 +17,7 @@ import {
 import { validateEmailLocalPart } from "@/lib/email-address"
 import { resolveEmailDomain } from "@/lib/auto-domain"
 import { bestEffortDeprovisionDns, getProvisionedDnsRecordIds } from "@/lib/dns-worker-client"
+import { resolveEmailExpiry } from "@/lib/email-expiry"
 
 export const runtime = "edge"
 
@@ -72,8 +72,13 @@ export async function POST(request: Request) {
       domain: string
     }>()
 
-    if (!EXPIRY_OPTIONS.some(option => option.value === expiryTime)) {
-      return NextResponse.json({ error: "无效的过期时间" }, { status: 400 })
+    const now = new Date()
+    const expiry = resolveEmailExpiry(expiryTime, now)
+    if (!expiry.success) {
+      return NextResponse.json(
+        { error: expiry.error, code: expiry.code },
+        { status: 400 }
+      )
     }
 
     const domainString = await env.SITE_CONFIG.get("EMAIL_DOMAINS")
@@ -152,10 +157,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const now = new Date()
-    const expires = expiryTime === 0
-      ? new Date("9999-01-01T00:00:00.000Z")
-      : new Date(now.getTime() + expiryTime)
+    const expires = expiry.expiresAt
 
     let reservedDomainId: string | null = null
     let domainActivated = false

@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { CreateDialog } from "./create-dialog"
 import { ShareDialog } from "./share-dialog"
+import { RenewDialog } from "./renew-dialog"
 import { Mail, RefreshCw, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -29,7 +30,7 @@ interface Email {
   id: string
   address: string
   createdAt: number
-  expiresAt: number
+  expiresAt: number | string
 }
 
 interface EmailListProps {
@@ -244,6 +245,16 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
     }
   }
 
+  const handleRenewed = (emailId: string, expiresAt: number) => {
+    setEmails((previous) => {
+      const nextEmails = previous.map((email) =>
+        email.id === emailId ? { ...email, expiresAt } : email
+      )
+      emailsRef.current = nextEmails
+      return nextEmails
+    })
+  }
+
   if (!session) return null
 
   return (
@@ -289,14 +300,23 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
                   <div className="truncate flex-1">
                     <div className="font-medium truncate">{email.address}</div>
                     <div className="text-xs text-gray-500">
-                      {new Date(email.expiresAt).getFullYear() === 9999 ? (
+                      {new Date(email.expiresAt).getUTCFullYear() >= 9999 ? (
                         t("permanent")
                       ) : (
                         `${t("expiresAt")}: ${new Date(email.expiresAt).toLocaleString()}`
                       )}
                     </div>
                   </div>
-                  <div className="opacity-0 group-hover:opacity-100 flex gap-1" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100" onClick={(e) => e.stopPropagation()}>
+                    {new Date(email.expiresAt).getUTCFullYear() < 9999 && (
+                      <RenewDialog
+                        emailId={email.id}
+                        emailAddress={email.address}
+                        expiresAt={new Date(email.expiresAt).getTime()}
+                        onRenewed={(expiresAt) => handleRenewed(email.id, expiresAt)}
+                        onExpired={handleRefresh}
+                      />
+                    )}
                     <ShareDialog emailId={email.id} emailAddress={email.address} />
                     <Button
                       variant="ghost"
