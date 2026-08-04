@@ -1,3 +1,10 @@
+import {
+  describeError,
+  parseJsonForLog,
+  summarizeUrlForLog,
+  truncateForLog,
+} from "./logging"
+
 interface Env {
   DB: D1Database
   SITE_CONFIG: KVNamespace
@@ -42,53 +49,6 @@ interface DnsWorkerResult {
 
 function normalizeDomainName(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, "")
-}
-
-function describeError(error: unknown) {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-    }
-  }
-
-  return {
-    message: String(error),
-  }
-}
-
-function truncateForLog(value: string, maxLength = 1000): string {
-  if (value.length <= maxLength) {
-    return value
-  }
-
-  return `${value.slice(0, maxLength)}...`
-}
-
-function parseJsonForLog<T>(value: string): T | null {
-  try {
-    return JSON.parse(value) as T
-  } catch {
-    return null
-  }
-}
-
-function summarizeUrlForLog(value: string) {
-  try {
-    const url = new URL(value)
-    return {
-      origin: url.origin,
-      pathname: url.pathname,
-      hasSearch: url.search.length > 0,
-    }
-  } catch (error) {
-    return {
-      origin: "invalid-url",
-      pathname: "invalid-url",
-      parseError: describeError(error).message,
-    }
-  }
 }
 
 function parseRecordIds(domain: DomainRow): string[] {
@@ -179,15 +139,12 @@ async function deleteExpiredEmailsForDomain(env: Env, domainName: string, now: n
 }
 
 async function deprovisionDomainDns(env: Env, domain: DomainRow, recordIds: string[]) {
-  if (recordIds.length === 0) {
-    return
-  }
-
   if (!env.DNS_WORKER_URL || !env.DNS_WORKER_SECRET) {
     throw new Error("DNS Worker is not configured")
   }
 
-  const requestUrl = `${env.DNS_WORKER_URL}/deprovision`
+  const dnsWorkerUrl = env.DNS_WORKER_URL.replace(/\/$/, "")
+  const requestUrl = `${dnsWorkerUrl}/deprovision`
   const endpoint = summarizeUrlForLog(requestUrl)
 
   console.log("DNS deprovision request", {
@@ -207,6 +164,7 @@ async function deprovisionDomainDns(env: Env, domain: DomainRow, recordIds: stri
     body: JSON.stringify({
       zoneId: domain.zoneId,
       recordIds,
+      domain: domain.name,
     }),
   })
 
@@ -233,7 +191,14 @@ async function deprovisionDomainDns(env: Env, domain: DomainRow, recordIds: stri
       contentType: response.headers.get("content-type"),
       cfRay: response.headers.get("cf-ray"),
       responseBody: truncateForLog(responseBody),
-      parsedResult: result,
+      parsedResult: result
+        ? {
+            success: result.success,
+            error: result.error ? truncateForLog(result.error, 500) : undefined,
+            resultCount: result.results?.length ?? 0,
+            failedResultCount: result.results?.filter((item) => !item.success).length ?? 0,
+          }
+        : null,
     })
     throw new Error(result?.error || `DNS cleanup failed with status ${response.status}`)
   }
@@ -281,7 +246,7 @@ async function cleanupAutoDomains(env: Env, now: number) {
       WHERE cleanup_policy = 'auto'
         AND cleanup_after IS NOT NULL
         AND cleanup_after <= ?
-        AND status IN ('active', 'cleanup_failed', 'cleanup_pending')
+        AND status IN ('provisioning', 'active', 'cleanup_failed', 'cleanup_pending')
       ORDER BY cleanup_after ASC
       LIMIT ?
     `)
@@ -358,7 +323,7 @@ async function cleanupAutoDomains(env: Env, now: number) {
         recordCount,
       })
     } catch (error) {
-      console.error(`Failed to cleanup auto domain ${domain.name}:`, {
+      console.error("Failed to cleanup auto domain", {
         domain: domain.name,
         domainId: domain.id,
         previousStatus: domain.status,
@@ -369,7 +334,7 @@ async function cleanupAutoDomains(env: Env, now: number) {
         try {
           await clearDomainRecordIds(env, domain.id)
         } catch (clearError) {
-          console.error(`Failed to clear DNS record IDs for ${domain.name}:`, {
+          console.error("Failed to clear DNS record IDs", {
             domain: domain.name,
             domainId: domain.id,
             error: describeError(clearError),
@@ -380,7 +345,10 @@ async function cleanupAutoDomains(env: Env, now: number) {
     }
   }
 
-  console.log(`Cleaned ${cleaned} auto domain(s)`)
+  console.log("Auto domain cleanup batch completed", {
+    candidateCount: domains.length,
+    cleanedCount: cleaned,
+  })
 }
 
 const main = {
@@ -420,7 +388,7 @@ const main = {
         now: new Date(Date.now()).toISOString(),
       })
     } catch (error) {
-      console.error("Failed to cleanup:", {
+      console.error("Failed to cleanup", {
         scheduledTime: new Date(event.scheduledTime).toISOString(),
         error: describeError(error),
       })

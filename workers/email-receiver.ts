@@ -1,45 +1,47 @@
 import { Env } from '../types'
 import { drizzle } from 'drizzle-orm/d1'
 import { messages, emails, webhooks } from '../app/lib/schema'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, gt, sql } from 'drizzle-orm'
 import PostalMime from 'postal-mime'
 import { WEBHOOK_CONFIG } from '../app/config/webhook'
 import { EmailMessage } from '../app/lib/webhook'
-
-function describeError(error: unknown) {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-    }
-  }
-
-  return {
-    message: String(error),
-  }
-}
+import { describeError } from './logging'
 
 const handleEmail = async (message: ForwardableEmailMessage, env: Env) => {
   const db = drizzle(env.DB, { schema: { messages, emails, webhooks } })
 
-  const parsedMessage = await PostalMime.parse(message.raw)
+  let parsedMessage: Awaited<ReturnType<typeof PostalMime.parse>>
+  try {
+    parsedMessage = await PostalMime.parse(message.raw)
+  } catch (error) {
+    console.error("Failed to parse inbound email", {
+      from: message.from,
+      to: message.to,
+      error: describeError(error),
+    })
+    throw error
+  }
 
   console.log("Inbound email parsed", {
     from: message.from,
     to: message.to,
-    subject: parsedMessage.subject || null,
+    hasSubject: Boolean(parsedMessage.subject),
+    subjectLength: parsedMessage.subject?.length ?? 0,
     hasText: Boolean(parsedMessage.text),
     hasHtml: Boolean(parsedMessage.html),
+    attachmentCount: parsedMessage.attachments?.length ?? 0,
   })
 
   try {
     const targetEmail = await db.query.emails.findFirst({
-      where: eq(sql`LOWER(${emails.address})`, message.to.toLowerCase())
+      where: and(
+        eq(sql`LOWER(${emails.address})`, message.to.toLowerCase()),
+        gt(emails.expiresAt, new Date())
+      )
     })
 
     if (!targetEmail) {
-      console.error("Inbound email target not found", {
+      console.error("Inbound email target not found or expired", {
         from: message.from,
         to: message.to,
       })
@@ -88,7 +90,7 @@ const handleEmail = async (message: ForwardableEmailMessage, env: Env) => {
           })
         }
       } catch (error) {
-        console.error('Failed to send webhook:', {
+        console.error('Failed to send webhook', {
           emailId: targetEmail.id,
           messageId: savedMessage.id,
           error: describeError(error),
@@ -100,10 +102,9 @@ const handleEmail = async (message: ForwardableEmailMessage, env: Env) => {
       emailId: targetEmail.id,
       messageId: savedMessage.id,
       to: targetEmail.address,
-      subject: parsedMessage.subject || null,
     })
   } catch (error) {
-    console.error('Failed to process email:', {
+    console.error('Failed to process email', {
       from: message.from,
       to: message.to,
       error: describeError(error),
